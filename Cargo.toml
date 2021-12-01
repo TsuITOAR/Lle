@@ -11,3 +11,4 @@ rayon = "*"
 
 [dev-dependencies]
 jkplot = { git = "https://github.com/TsuITOAR/jkplot" }
+function_name = "*"

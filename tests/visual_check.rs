@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use function_name::named;
 use lle::{Evolver, LinearOp, LleSolver, Step};
 use rustfft::num_complex::{Complex, Complex64};
 
@@ -26,6 +27,7 @@ fn get_file_path<F: AsRef<str>>(f: F) -> PathBuf {
 
 #[test]
 #[ignore]
+#[named]
 fn static_linear() {
     const STEP_NUM: u32 = 25_000;
     let nonlin = |x: Complex64| Complex::i() * x.norm_sqr();
@@ -40,7 +42,7 @@ fn static_linear() {
     );
     use jkplot::ColorMapVisualizer;
     let mut visualizer = ColorMapVisualizer::new(
-        get_file_path("static_linear.png"),
+        get_file_path(concat!(function_name!(), ".png")),
         (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2),
     );
     let mut frame = 0;
@@ -55,6 +57,7 @@ fn static_linear() {
 
 #[test]
 #[ignore]
+#[named]
 fn moving_linear() {
     const STEP_NUM: u32 = 250_000;
     let nonlin = |x: Complex64| Complex::i() * x.norm_sqr();
@@ -71,7 +74,7 @@ fn moving_linear() {
     );
     use jkplot::ColorMapVisualizer;
     let mut visualizer = ColorMapVisualizer::new(
-        get_file_path("moving_linear.png"),
+        get_file_path(concat!(function_name!(), ".png")),
         (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2),
     );
     let mut frame = 0;

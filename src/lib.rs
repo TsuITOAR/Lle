@@ -74,7 +74,8 @@ mod tests {
     #[test]
     fn evolve_some() {
         let step_dist = 0.1;
-        let start = [Complex64::new(1., 0.); 128];
+        let mut start = [Complex64::new(1., 0.); 128];
+        start[35] = (0.).into();
         let mut s = LleSolver::new(
             start.clone(),
             step_dist,
@@ -114,7 +115,7 @@ pub trait Evolver<T: LleNum> {
         (0..n).for_each(|_| self.evolve())
     }
     fn evolve_until(&mut self, mut until: impl FnMut(&[Complex<T>]) -> bool) {
-        while until(self.state()) {
+        while !until(self.state()) {
             self.evolve();
         }
     }
@@ -130,7 +131,7 @@ pub trait Evolver<T: LleNum> {
         mut until: impl FnMut(&[Complex<T>]) -> bool,
         mut monitor: impl FnMut(&[Complex<T>]),
     ) {
-        while until(self.state()) {
+        while !until(self.state()) {
             self.evolve_with_monitor(&mut monitor)
         }
     }
@@ -173,7 +174,7 @@ pub trait ParEvolver<T: LleNum> {
         (0..n).for_each(|_| self.par_evolve())
     }
     fn par_evolve_until(&mut self, mut until: impl FnMut(&[Complex<T>]) -> bool) {
-        while until(self.state()) {
+        while !until(self.state()) {
             self.par_evolve();
         }
     }
@@ -189,7 +190,7 @@ pub trait ParEvolver<T: LleNum> {
         mut until: impl FnMut(&[Complex<T>]) -> bool,
         mut monitor: impl FnMut(&[Complex<T>]),
     ) {
-        while until(self.state()) {
+        while !until(self.state()) {
             self.par_evolve_with_monitor(&mut monitor)
         }
     }

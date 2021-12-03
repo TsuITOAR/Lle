@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use num_traits::{Float, FloatConst, NumAssignRef};
+use num_complex::Complex;
+use num_traits::{Float, FloatConst, NumAssignRef, NumRef};
 use rayon::prelude::*;
-use rustfft::num_traits::NumRef;
-use rustfft::{num_complex::Complex, num_traits, FftPlanner};
+use rustfft::FftPlanner;
 use rustfft::{Fft, FftNum};
+
+pub use rayon;
+pub use rustfft::{self, num_complex, num_traits};
 
 #[cfg(test)]
 mod tests {

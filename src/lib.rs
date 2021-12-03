@@ -105,7 +105,7 @@ mod tests {
     }
 }
 
-pub type Step = u32;
+pub type Step = u64;
 pub type Freq = i32;
 pub type DiffOrder = u32;
 pub trait LleNum: NumAssignRef + NumRef + FftNum + Float + FloatConst {}

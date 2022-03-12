@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use num_traits::{Float, FloatConst, NumAssignRef};
+use num_complex::Complex;
+use num_traits::{Float, FloatConst, NumAssignRef, NumRef};
 use rayon::prelude::*;
-use rustfft::num_traits::NumRef;
-use rustfft::{num_complex::Complex, num_traits, FftPlanner};
+use rustfft::FftPlanner;
 use rustfft::{Fft, FftNum};
+
+pub use rayon;
+pub use rustfft::{self, num_complex, num_traits};
 
 #[cfg(test)]
 mod tests {
@@ -102,7 +105,7 @@ mod tests {
     }
 }
 
-pub type Step = u32;
+pub type Step = u64;
 pub type Freq = i32;
 pub type DiffOrder = u32;
 pub trait LleNum: NumAssignRef + NumRef + FftNum + Float + FloatConst {}
@@ -111,6 +114,7 @@ impl<T> LleNum for T where T: NumAssignRef + NumRef + FftNum + Float + FloatCons
 pub trait Evolver<T: LleNum> {
     fn evolve(&mut self);
     fn state(&self) -> &[Complex<T>];
+    fn state_mut(&mut self) -> &mut [Complex<T>];
     fn evolve_n(&mut self, n: Step) {
         (0..n).for_each(|_| self.evolve())
     }
@@ -150,6 +154,9 @@ where
     fn state(&self) -> &[Complex<T>] {
         LleSolver::state(self)
     }
+    fn state_mut(&mut self) -> &mut [Complex<T>] {
+        LleSolver::state_mut(self)
+    }
 }
 
 impl<T, S, Linear, NonLin> ParEvolver<T> for LleSolver<T, S, Linear, NonLin>
@@ -165,11 +172,15 @@ where
     fn state(&self) -> &[Complex<T>] {
         LleSolver::state(self)
     }
+    fn state_mut(&mut self) -> &mut [Complex<T>] {
+        LleSolver::state_mut(self)
+    }
 }
 
 pub trait ParEvolver<T: LleNum> {
     fn par_evolve(&mut self);
     fn state(&self) -> &[Complex<T>];
+    fn state_mut(&mut self) -> &mut [Complex<T>];
     fn par_evolve_n(&mut self, n: Step) {
         (0..n).for_each(|_| self.par_evolve())
     }
@@ -250,6 +261,9 @@ where
     }
     fn state(&self) -> &[Complex<T>] {
         self.state.as_ref()
+    }
+    fn state_mut(&mut self) -> &mut [Complex<T>] {
+        self.state.as_mut()
     }
     fn evolve(&mut self) {
         if let Some(ref mut nonlin) = self.nonlin {

@@ -92,8 +92,6 @@ fn moving_linear() {
 fn step_linear() {
     const DELTA: f64 = 2.;
     const STEP_NUM: u32 = 250_000;
-    const ALPHA_START: f64 = -DELTA * 2.;
-    const ALPHA_END: f64 = DELTA * 5.;
     let nonlin = |x: Complex64| Complex::i() * x.norm_sqr();
     let alpha_step = (ALPHA_END - ALPHA_START) as f64 / STEP_NUM as f64;
     let linear = (|step: Step, freq: Freq| {

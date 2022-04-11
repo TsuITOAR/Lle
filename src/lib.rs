@@ -1,8 +1,10 @@
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use num_complex::Complex;
 use num_traits::{Float, FloatConst, NumAssignRef, NumRef};
 use rayon::prelude::*;
+use rustfft::num_traits::Zero;
 use rustfft::FftPlanner;
 use rustfft::{Fft, FftNum};
 
@@ -282,6 +284,7 @@ where
                 &self.fft,
                 self.step_dist,
                 self.cur_step,
+                |_| {},
             );
             let c = self.constant.unwrap_or_else(|| T::zero().into());
             self.state
@@ -322,6 +325,7 @@ where
                 &self.fft,
                 self.step_dist,
                 self.cur_step,
+                |_| {},
             );
             let c = self.constant.unwrap_or_else(|| T::zero().into());
             self.state
@@ -339,16 +343,18 @@ where
 }
 
 // !WARN:this function will scale every element 'len' times due to fft
-fn apply_linear<T: LleNum, L: LinearOp<T = T>>(
+fn apply_linear<T: LleNum, L: LinearOp<T = T>, Out>(
     state: &mut [Complex<T>],
     linear: &L,
     len: usize,
     fft: &(Arc<dyn Fft<T>>, Arc<dyn Fft<T>>),
     step_dist: T,
     cur_step: Step,
-) {
+    apply_to_freq: impl FnOnce(&[Complex<T>]) -> Out,
+) -> Out {
     let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len
     fft.0.process(state);
+    let ret = apply_to_freq(&state);
     let (pos_freq, neg_freq) = state.split_at_mut(split_pos);
     neg_freq
         .iter_mut()
@@ -359,20 +365,23 @@ fn apply_linear<T: LleNum, L: LinearOp<T = T>>(
                 .exp()
         });
     fft.1.process(state);
+    ret
 }
 
 // !WARN:this function will scale every element 'len' times due to fft
-fn par_apply_linear<T: LleNum, L: LinearOp<T = T> + Sync>(
+fn par_apply_linear<T: LleNum, L: LinearOp<T = T> + Sync, Out>(
     state: &mut [Complex<T>],
     linear: &L,
     len: usize,
     fft: &(Arc<dyn Fft<T>>, Arc<dyn Fft<T>>),
     step_dist: T,
     cur_step: Step,
-) {
+    apply_to_freq: impl FnOnce(&[Complex<T>]) -> Out,
+) -> Out {
     let state = state.as_mut();
     let split_pos = (len + 1) / 2;
     fft.0.process(state);
+    let ret = apply_to_freq(&state);
     let (pos_freq, neg_freq) = state.split_at_mut(split_pos);
     neg_freq
         .par_iter_mut()
@@ -383,6 +392,7 @@ fn par_apply_linear<T: LleNum, L: LinearOp<T = T> + Sync>(
                 (linear.get_value(cur_step, x.0 as i32 - (split_pos / 2) as i32) * step_dist).exp()
         });
     fft.1.process(state);
+    ret
 }
 
 #[derive(Clone, Debug)]
@@ -496,6 +506,24 @@ impl<T: LleNum, F: Fn(Step) -> Complex<T>> LinearOp for (DiffOrder, F) {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct NoneOp<T> {
+    p: PhantomData<T>,
+}
+
+impl<T> Default for NoneOp<T> {
+    fn default() -> Self {
+        Self { p: PhantomData }
+    }
+}
+
+impl<T: Zero + LleNum> LinearOp for NoneOp<T> {
+    type T = T;
+    fn get_value(&self, _step: Step, _freq: Freq) -> Complex<Self::T> {
+        T::zero().into()
+    }
+}
+
 macro_rules! CompoundLinear {
     ($name:ident<$g1:ident, $g2:ident>,$op:tt) => {
         pub struct $name<$g1:LinearOp,$g2:LinearOp<T=$g1::T>> {
@@ -538,19 +566,148 @@ impl<T: LleNum> IntoLinearOps for Option<(DiffOrder, Complex<T>)> {
     }
 }
 
-/* pub struct CoupledLleSolver<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple>
+pub struct CoupledLleSolver<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple>
 where
     T: LleNum,
     S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    Linear1: Fn(Complex<T>) -> Complex<T>,
+    Linear1: LinearOp<T = T>,
     NonLin1: Fn(Complex<T>) -> Complex<T>,
     S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    Linear2: Fn(Complex<T>) -> Complex<T>,
+    Linear2: LinearOp<T = T>,
     NonLin2: Fn(Complex<T>) -> Complex<T>,
     Couple: Fn(&[Complex<T>]) -> Complex<T>,
 {
     component1: LleSolver<T, S1, Linear1, NonLin1>,
     component2: LleSolver<T, S2, Linear2, NonLin2>,
     coup_coefficient: Couple,
+    cur_step: usize,
 }
- */
+
+impl<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple> Evolver<T>
+    for CoupledLleSolver<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple>
+where
+    T: LleNum,
+    S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+    Linear1: LinearOp<T = T>,
+    NonLin1: Fn(Complex<T>) -> Complex<T>,
+    S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+    Linear2: LinearOp<T = T>,
+    NonLin2: Fn(Complex<T>) -> Complex<T>,
+    Couple: Fn(&[Complex<T>]) -> Complex<T>,
+    &mut Couple: Copy,
+{
+    fn evolve(&mut self) {
+        let Self {
+            component1,
+            component2,
+            coup_coefficient,
+            cur_step,
+        } = self;
+        if let Some(ref mut nonlin) = component1.nonlin {
+            nonlin.refresh(component1.state.as_ref());
+            component1
+                .state
+                .as_mut()
+                .iter_mut()
+                .zip(nonlin.buff().iter())
+                .for_each(|x| *x.0 *= (x.1 * component1.step_dist).exp())
+        }
+        let couple1 = if let Some(ref linear) = component1.linear {
+            let ret = apply_linear(
+                component1.state.as_mut(),
+                linear,
+                component1.len,
+                &component1.fft,
+                component1.step_dist,
+                component1.cur_step,
+                coup_coefficient,
+            );
+            component1
+                .state
+                .as_mut()
+                .iter_mut()
+                .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
+            ret
+        } else {
+            let ret = apply_linear(
+                component1.state.as_mut(),
+                &NoneOp::default(),
+                component1.len,
+                &component1.fft,
+                component1.step_dist,
+                component1.cur_step,
+                coup_coefficient,
+            );
+            component1
+                .state
+                .as_mut()
+                .iter_mut()
+                .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
+            ret
+        };
+        if let Some(ref mut nonlin) = component2.nonlin {
+            nonlin.refresh(component2.state.as_ref());
+            component2
+                .state
+                .as_mut()
+                .iter_mut()
+                .zip(nonlin.buff().iter())
+                .for_each(|x| *x.0 *= (x.1 * component2.step_dist).exp())
+        }
+        let couple2 = if let Some(ref linear) = component2.linear {
+            let ret = apply_linear(
+                component2.state.as_mut(),
+                linear,
+                component2.len,
+                &component2.fft,
+                component2.step_dist,
+                component2.cur_step,
+                coup_coefficient,
+            );
+            component2
+                .state
+                .as_mut()
+                .iter_mut()
+                .for_each(|x| *x = *x / T::from_usize(component2.len).unwrap());
+            ret
+        } else {
+            let ret = apply_linear(
+                component2.state.as_mut(),
+                &NoneOp::default(),
+                component2.len,
+                &component2.fft,
+                component2.step_dist,
+                component2.cur_step,
+                coup_coefficient,
+            );
+            component2
+                .state
+                .as_mut()
+                .iter_mut()
+                .for_each(|x| *x = *x / T::from_usize(component2.len).unwrap());
+            ret
+        };
+        let c1 = component1.constant.unwrap_or(T::zero().into()) + couple2;
+        let c2 = component2.constant.unwrap_or(T::zero().into()) + couple1;
+
+        component1
+            .state
+            .as_mut()
+            .iter_mut()
+            .for_each(|x| *x += c1 * component1.step_dist);
+        component2
+            .state
+            .as_mut()
+            .iter_mut()
+            .for_each(|x| *x += c2 * component1.step_dist);
+        *cur_step += 1;
+    }
+
+    fn state(&self) -> &[Complex<T>] {
+        self.component1.state()
+    }
+
+    fn state_mut(&mut self) -> &mut [Complex<T>] {
+        self.component1.state_mut()
+    }
+}

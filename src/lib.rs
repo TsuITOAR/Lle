@@ -13,7 +13,7 @@ pub use rustfft::{self, num_complex, num_traits};
 
 #[cfg(test)]
 mod tests {
-    use crate::{Evolver, LinearOp, LleSolver};
+    use crate::{Evolver, LinearOp, LleSolver, Step};
     use rustfft::num_complex::Complex64;
     #[test]
     fn linear_ops() {
@@ -35,7 +35,7 @@ mod tests {
             linear1.get_value(5, 7) + linear2.get_value(5, 7)
         );
 
-        let linear4 = (1, |step: u32| Complex64::from(step as f64));
+        let linear4 = (1u32, |step: Step| Complex64::from(step as f64));
         assert_eq!(
             linear4.get_value(2, 4),
             Complex64::from(2.) * (-Complex64::i() * 4.).powu(1)
@@ -45,7 +45,7 @@ mod tests {
             Complex64::from(3.) * (-Complex64::i() * 7.).powu(1)
         );
 
-        let linear5 = |step: u32, _pos: i32| Complex64::from(step as f64);
+        let linear5 = |step: Step, _pos: i32| Complex64::from(step as f64);
         assert_eq!(linear5.get_value(1, 3), (1.).into());
         assert_eq!(linear5.get_value(6, 3), (6.).into());
     }
@@ -107,7 +107,7 @@ mod tests {
     }
 }
 
-pub type Step = u64;
+pub type Step = u32;
 pub type Freq = i32;
 pub type DiffOrder = u32;
 pub trait LleNum: NumAssignRef + NumRef + FftNum + Float + FloatConst {}
@@ -583,6 +583,44 @@ where
     cur_step: usize,
 }
 
+impl<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple>
+    CoupledLleSolver<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple>
+where
+    T: LleNum,
+    S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+    Linear1: LinearOp<T = T>,
+    NonLin1: Fn(Complex<T>) -> Complex<T>,
+    S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+    Linear2: LinearOp<T = T>,
+    NonLin2: Fn(Complex<T>) -> Complex<T>,
+    Couple: Fn(&[Complex<T>]) -> Complex<T>,
+{
+    pub fn new(
+        comp1: LleSolver<T, S1, Linear1, NonLin1>,
+        comp2: LleSolver<T, S2, Linear2, NonLin2>,
+        coup: Couple,
+    ) -> Self {
+        Self {
+            component1: comp1,
+            component2: comp2,
+            coup_coefficient: coup,
+            cur_step: 0,
+        }
+    }
+    pub fn comp1(&self) -> &LleSolver<T, S1, Linear1, NonLin1> {
+        &self.component1
+    }
+    pub fn comp2(&self) -> &LleSolver<T, S2, Linear2, NonLin2> {
+        &self.component2
+    }
+    pub fn comp1_mut(&mut self) -> &mut LleSolver<T, S1, Linear1, NonLin1> {
+        &mut self.component1
+    }
+    pub fn comp2_mut(&mut self) -> &mut LleSolver<T, S2, Linear2, NonLin2> {
+        &mut self.component2
+    }
+}
+
 impl<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple> Evolver<T>
     for CoupledLleSolver<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple>
 where
@@ -593,8 +631,8 @@ where
     S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
     Linear2: LinearOp<T = T>,
     NonLin2: Fn(Complex<T>) -> Complex<T>,
-    Couple: Fn(&[Complex<T>]) -> Complex<T>,
-    &mut Couple: Copy,
+    Couple: Fn(&[Complex<T>]) -> Complex<T> + 'static,
+    for<'a> &'a mut Couple: Copy,
 {
     fn evolve(&mut self) {
         let Self {

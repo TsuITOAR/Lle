@@ -284,7 +284,7 @@ where
                 &self.fft,
                 self.step_dist,
                 self.cur_step,
-                |_| {},
+                &mut |_| {},
             );
             let c = self.constant.unwrap_or_else(|| T::zero().into());
             self.state
@@ -343,14 +343,14 @@ where
 }
 
 // !WARN:this function will scale every element 'len' times due to fft
-fn apply_linear<T: LleNum, L: LinearOp<T = T>, Out>(
+fn apply_linear<T: LleNum, L: LinearOp<T = T>, Out, A: FnMut(&[Complex<T>]) -> Out>(
     state: &mut [Complex<T>],
     linear: &L,
     len: usize,
     fft: &(Arc<dyn Fft<T>>, Arc<dyn Fft<T>>),
     step_dist: T,
     cur_step: Step,
-    apply_to_freq: impl FnOnce(&[Complex<T>]) -> Out,
+    apply_to_freq: &mut A,
 ) -> Out {
     let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len
     fft.0.process(state);
@@ -577,9 +577,9 @@ where
     NonLin2: Fn(Complex<T>) -> Complex<T>,
     Couple: Fn(&[Complex<T>]) -> Complex<T>,
 {
-    component1: LleSolver<T, S1, Linear1, NonLin1>,
-    component2: LleSolver<T, S2, Linear2, NonLin2>,
-    coup_coefficient: Couple,
+    pub component1: LleSolver<T, S1, Linear1, NonLin1>,
+    pub component2: LleSolver<T, S2, Linear2, NonLin2>,
+    pub coup_coefficient: Couple,
     cur_step: usize,
 }
 
@@ -607,18 +607,6 @@ where
             cur_step: 0,
         }
     }
-    pub fn comp1(&self) -> &LleSolver<T, S1, Linear1, NonLin1> {
-        &self.component1
-    }
-    pub fn comp2(&self) -> &LleSolver<T, S2, Linear2, NonLin2> {
-        &self.component2
-    }
-    pub fn comp1_mut(&mut self) -> &mut LleSolver<T, S1, Linear1, NonLin1> {
-        &mut self.component1
-    }
-    pub fn comp2_mut(&mut self) -> &mut LleSolver<T, S2, Linear2, NonLin2> {
-        &mut self.component2
-    }
 }
 
 impl<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2, Couple> Evolver<T>
@@ -632,7 +620,6 @@ where
     Linear2: LinearOp<T = T>,
     NonLin2: Fn(Complex<T>) -> Complex<T>,
     Couple: Fn(&[Complex<T>]) -> Complex<T> + 'static,
-    for<'a> &'a mut Couple: Copy,
 {
     fn evolve(&mut self) {
         let Self {
@@ -737,7 +724,7 @@ where
             .state
             .as_mut()
             .iter_mut()
-            .for_each(|x| *x += c2 * component1.step_dist);
+            .for_each(|x| *x += c2 * component2.step_dist);
         *cur_step += 1;
     }
 

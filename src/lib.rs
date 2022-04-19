@@ -635,11 +635,16 @@ where
         comp2_sqr_ave /= T::from_usize(component2.state().len()).unwrap();
         if let Some(ref mut nonlin) = component1.nonlin {
             nonlin.refresh(component1.state.as_ref());
-            component1.state.as_mut().iter_mut().for_each(|x| {
-                *x *=
-                    (Complex::i() * comp2_sqr_ave * T::from_f64(2.).unwrap() * component1.step_dist)
+            component1
+                .state
+                .as_mut()
+                .iter_mut()
+                .zip(nonlin.buff().iter())
+                .for_each(|x| {
+                    *x.0 *= ((x.1 + Complex::i() * comp2_sqr_ave * T::from_f64(2.).unwrap())
+                        * component1.step_dist)
                         .exp()
-            })
+                })
         } else {
             component1.state.as_mut().iter_mut().for_each(|x| {
                 *x *=
@@ -676,7 +681,7 @@ where
                 .iter_mut()
                 .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
         };
-        
+
         let c1 = component1.constant.unwrap_or(Complex::zero())
             + comp2_ave * Complex::i() * *coup_coefficient;
         component1

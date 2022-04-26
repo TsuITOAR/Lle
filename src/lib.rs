@@ -667,14 +667,6 @@ where
                 .iter_mut()
                 .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
         } else {
-            apply_linear(
-                component1.state.as_mut(),
-                &NoneOp::default(),
-                component1.len,
-                &component1.fft,
-                component1.step_dist,
-                component1.cur_step,
-            );
             component1
                 .state
                 .as_mut()
@@ -724,14 +716,6 @@ where
                 .iter_mut()
                 .for_each(|x| *x = *x / T::from_usize(component2.len).unwrap());
         } else {
-            apply_linear(
-                component2.state.as_mut(),
-                &NoneOp::default(),
-                component2.len,
-                &component2.fft,
-                component2.step_dist,
-                component2.cur_step,
-            );
             component2
                 .state
                 .as_mut()

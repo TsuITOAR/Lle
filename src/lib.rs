@@ -617,120 +617,100 @@ where
             coup_coefficient,
             cur_step,
         } = self;
-        let (mut comp1_ave, mut comp1_sqr_ave) = component1
+        let mut comp1_sqr_ave = component1
             .state()
             .iter()
-            .fold((Complex::zero(), T::zero()), |a, b| {
-                (a.0 + *b, a.1 + b.norm_sqr())
-            });
-        comp1_ave /= T::from_usize(component1.state().len()).unwrap();
+            .fold(T::zero(), |a, b| a + b.norm_sqr());
         comp1_sqr_ave /= T::from_usize(component1.state().len()).unwrap();
-        let (mut comp2_ave, mut comp2_sqr_ave) = component2
+        let mut comp2_sqr_ave = component2
             .state()
             .iter()
-            .fold((Complex::zero(), T::zero()), |a, b| {
-                (a.0 + *b, a.1 + b.norm_sqr())
-            });
-        comp2_ave /= T::from_usize(component2.state().len()).unwrap();
+            .fold(T::zero(), |a, b| a + b.norm_sqr());
         comp2_sqr_ave /= T::from_usize(component2.state().len()).unwrap();
-        if let Some(ref mut nonlin) = component1.nonlin {
-            nonlin.refresh(component1.state.as_ref());
-            component1
-                .state
-                .as_mut()
-                .iter_mut()
-                .zip(nonlin.buff().iter())
-                .for_each(|x| {
-                    *x.0 *= ((x.1 + Complex::i() * comp2_sqr_ave * T::from_f64(2.).unwrap())
-                        * component1.step_dist)
+
+        fn evolve_comp<
+            T: LleNum,
+            S: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+            Linear: LinearOp<T = T>,
+            NonLin: Fn(Complex<T>) -> Complex<T>,
+        >(
+            s: &mut LleSolver<T, S, Linear, NonLin>,
+            counter_sqr_ave: T,
+        ) {
+            if let Some(ref mut nonlin) = s.nonlin {
+                nonlin.refresh(s.state.as_ref());
+                s.state
+                    .as_mut()
+                    .iter_mut()
+                    .zip(nonlin.buff().iter())
+                    .for_each(|x| {
+                        *x.0 *= ((x.1 + Complex::i() * counter_sqr_ave * T::from_f64(2.).unwrap())
+                            * s.step_dist)
+                            .exp()
+                    })
+            } else {
+                s.state.as_mut().iter_mut().for_each(|x| {
+                    *x *= (Complex::i() * counter_sqr_ave * T::from_f64(2.).unwrap() * s.step_dist)
                         .exp()
                 })
-        } else {
-            component1.state.as_mut().iter_mut().for_each(|x| {
-                *x *=
-                    (Complex::i() * comp2_sqr_ave * T::from_f64(2.).unwrap() * component1.step_dist)
-                        .exp()
-            })
+            }
+            if let Some(ref linear) = s.linear {
+                apply_linear(
+                    s.state.as_mut(),
+                    linear,
+                    s.len,
+                    &s.fft,
+                    s.step_dist,
+                    s.cur_step,
+                );
+                s.state
+                    .as_mut()
+                    .iter_mut()
+                    .for_each(|x| *x = *x / T::from_usize(s.len).unwrap());
+            };
+            if let Some(c) = s.constant {
+                s.state
+                    .as_mut()
+                    .iter_mut()
+                    .for_each(|x| *x += c * s.step_dist);
+            }
         }
-        if let Some(ref linear) = component1.linear {
-            apply_linear(
-                component1.state.as_mut(),
-                linear,
-                component1.len,
-                &component1.fft,
-                component1.step_dist,
-                component1.cur_step,
-            );
-            component1
-                .state
-                .as_mut()
-                .iter_mut()
-                .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
-        } else {
-            component1
-                .state
-                .as_mut()
-                .iter_mut()
-                .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
-        };
+        evolve_comp(component1, comp2_sqr_ave);
+        evolve_comp(component2, comp1_sqr_ave);
 
-        let c1 = component1.constant.unwrap_or(Complex::zero())
-            + comp2_ave * Complex::i() * *coup_coefficient;
+        //couple term
+        component1.fft.0.process(component1.state.as_mut());
+        component2.fft.0.process(component2.state.as_mut());
+        let s1: Box<[Complex<T>]> = component1.state.as_ref().into();
+        let s2: Box<[Complex<T>]> = component2.state.as_ref().into();
+        
         component1
             .state
             .as_mut()
             .iter_mut()
-            .for_each(|x| *x += c1 * component1.step_dist);
-
-        if let Some(ref mut nonlin) = component2.nonlin {
-            nonlin.refresh(component2.state.as_ref());
-            component2
-                .state
-                .as_mut()
-                .iter_mut()
-                .zip(nonlin.buff().iter())
-                .for_each(|x| {
-                    *x.0 *= ((x.1 + Complex::i() * comp1_sqr_ave * T::from_f64(2.).unwrap())
-                        * component2.step_dist)
-                        .exp()
-                })
-        } else {
-            component2.state.as_mut().iter_mut().for_each(|x| {
-                *x *=
-                    (Complex::i() * comp1_sqr_ave * T::from_f64(2.).unwrap() * component2.step_dist)
-                        .exp()
-            })
-        }
-        if let Some(ref linear) = component2.linear {
-            apply_linear(
-                component2.state.as_mut(),
-                linear,
-                component2.len,
-                &component2.fft,
-                component2.step_dist,
-                component2.cur_step,
-            );
-            component2
-                .state
-                .as_mut()
-                .iter_mut()
-                .for_each(|x| *x = *x / T::from_usize(component2.len).unwrap());
-        } else {
-            component2
-                .state
-                .as_mut()
-                .iter_mut()
-                .for_each(|x| *x = *x / T::from_usize(component2.len).unwrap());
-        };
-        let c2 = component2.constant.unwrap_or(Complex::zero())
-            + comp1_ave * Complex::i() * *coup_coefficient;
-
+            .zip(s2.into_iter())
+            .for_each(|(x, y)| *x += *coup_coefficient * Complex::i() * y * component1.step_dist);
         component2
             .state
             .as_mut()
             .iter_mut()
-            .for_each(|x| *x += c2 * component2.step_dist);
+            .zip(s1.into_iter())
+            .for_each(|(x, y)| *x += *coup_coefficient * Complex::i() * y * component2.step_dist);
 
+        component1.fft.1.process(component1.state.as_mut());
+        component2.fft.1.process(component2.state.as_mut());
+
+        component1
+            .state
+            .as_mut()
+            .iter_mut()
+            .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
+        component2
+            .state
+            .as_mut()
+            .iter_mut()
+            .for_each(|x| *x = *x / T::from_usize(component2.len).unwrap());
+            
         *cur_step += 1;
     }
 

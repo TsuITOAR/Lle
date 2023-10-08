@@ -209,12 +209,36 @@ pub trait ParEvolver<T: LleNum> {
     }
 }
 
-pub struct LleSolver<
-    T,
-    S,
-    Linear = (DiffOrder, Complex<T>),
-    Nonlin = Box<dyn Fn(Complex<T>) -> Complex<T>>,
-> where
+pub(crate) struct BufferedFft<T: LleNum> {
+    fft: Arc<dyn Fft<T>>,
+    buf: Vec<Complex<T>>,
+}
+
+impl<T: LleNum> BufferedFft<T> {
+    pub fn new(len: usize) -> (Self, Self) {
+        let mut f = FftPlanner::new();
+        let fft1 = f.plan_fft_forward(len);
+        let fft2 = f.plan_fft_inverse(len);
+        (
+            Self {
+                buf: vec![Complex::zero(); fft1.get_inplace_scratch_len()],
+                fft: fft1,
+            },
+            Self {
+                buf: vec![Complex::zero(); fft2.get_inplace_scratch_len()],
+                fft: fft2,
+            },
+        )
+    }
+
+    pub fn process(&mut self, data: &mut [Complex<T>]) {
+        self.fft.process_with_scratch(data, &mut self.buf)
+    }
+}
+
+#[derive(typed_builder::TypedBuilder)]
+pub struct LleSolver<T, S, Linear, Nonlin>
+where
     T: LleNum,
     S: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
     Linear: LinearOp<T = T>,
@@ -225,7 +249,8 @@ pub struct LleSolver<
     pub nonlin: Option<NonlinOp<T, Nonlin>>,
     pub constant: Option<Complex<T>>,
     pub step_dist: T,
-    fft: (Arc<dyn Fft<T>>, Arc<dyn Fft<T>>),
+    #[builder(default, setter(skip))]
+    fft: Option<(BufferedFft<T>, BufferedFft<T>)>,
     len: usize,
     cur_step: Step,
 }
@@ -248,7 +273,6 @@ where
         nonlin: N,
         constant: C,
     ) -> Self {
-        let mut f = FftPlanner::new();
         let len = init.as_ref().len();
         Self {
             state: init,
@@ -256,7 +280,7 @@ where
             nonlin: nonlin.into_nonlin_ops(),
             constant: constant.into(),
             step_dist,
-            fft: (f.plan_fft_forward(len), f.plan_fft_inverse(len)),
+            fft: Some(BufferedFft::new(len)),
             len,
             cur_step: 0,
         }
@@ -281,7 +305,7 @@ where
                 self.state.as_mut(),
                 linear,
                 self.len,
-                &self.fft,
+                self.fft.get_or_insert_with(|| BufferedFft::new(self.len)),
                 self.step_dist,
                 self.cur_step,
             );
@@ -321,7 +345,7 @@ where
                 self.state.as_mut(),
                 linear,
                 self.len,
-                &self.fft,
+                self.fft.get_or_insert_with(|| BufferedFft::new(self.len)),
                 self.step_dist,
                 self.cur_step,
             );
@@ -345,7 +369,7 @@ fn apply_linear<T: LleNum, L: LinearOp<T = T>>(
     state: &mut [Complex<T>],
     linear: &L,
     len: usize,
-    fft: &(Arc<dyn Fft<T>>, Arc<dyn Fft<T>>),
+    fft: &mut (BufferedFft<T>, BufferedFft<T>),
     step_dist: T,
     cur_step: Step,
 ) {
@@ -368,11 +392,10 @@ fn par_apply_linear<T: LleNum, L: LinearOp<T = T> + Sync>(
     state: &mut [Complex<T>],
     linear: &L,
     len: usize,
-    fft: &(Arc<dyn Fft<T>>, Arc<dyn Fft<T>>),
+    fft: &mut (BufferedFft<T>, BufferedFft<T>),
     step_dist: T,
     cur_step: Step,
 ) {
-    let state = state.as_mut();
     let split_pos = (len + 1) / 2;
     fft.0.process(state);
     let (pos_freq, neg_freq) = state.split_at_mut(split_pos);
@@ -558,6 +581,7 @@ impl<T: LleNum> IntoLinearOps for Option<(DiffOrder, Complex<T>)> {
     }
 }
 
+#[derive(typed_builder::TypedBuilder)]
 pub struct CoupledLleSolver<T, S1, Linear1, NonLin1, S2, Linear2, NonLin2>
 where
     T: LleNum,
@@ -659,14 +683,14 @@ where
                     s.state.as_mut(),
                     linear,
                     s.len,
-                    &s.fft,
+                    s.fft.get_or_insert_with(|| BufferedFft::new(s.len)),
                     s.step_dist,
                     s.cur_step,
                 );
                 s.state
                     .as_mut()
                     .iter_mut()
-                    .for_each(|x| *x = *x / T::from_usize(s.len).unwrap());
+                    .for_each(|x| *x /= T::from_usize(s.len).unwrap());
             };
             if let Some(c) = s.constant {
                 s.state
@@ -679,38 +703,45 @@ where
         evolve_comp(component2, comp1_sqr_ave);
 
         //couple term
-        component1.fft.0.process(component1.state.as_mut());
-        component2.fft.0.process(component2.state.as_mut());
+        let fft1 = component1
+            .fft
+            .get_or_insert_with(|| BufferedFft::new(component1.len));
+        let fft2 = component2
+            .fft
+            .get_or_insert_with(|| BufferedFft::new(component2.len));
+
+        fft1.0.process(component1.state.as_mut());
+        fft2.0.process(component2.state.as_mut());
         let s1: Box<[Complex<T>]> = component1.state.as_ref().into();
         let s2: Box<[Complex<T>]> = component2.state.as_ref().into();
-        
+
         component1
             .state
             .as_mut()
             .iter_mut()
-            .zip(s2.into_iter())
+            .zip(s2.iter())
             .for_each(|(x, y)| *x += *coup_coefficient * Complex::i() * y * component1.step_dist);
         component2
             .state
             .as_mut()
             .iter_mut()
-            .zip(s1.into_iter())
+            .zip(s1.iter())
             .for_each(|(x, y)| *x += *coup_coefficient * Complex::i() * y * component2.step_dist);
 
-        component1.fft.1.process(component1.state.as_mut());
-        component2.fft.1.process(component2.state.as_mut());
+        fft1.1.process(component1.state.as_mut());
+        fft2.1.process(component2.state.as_mut());
 
         component1
             .state
             .as_mut()
             .iter_mut()
-            .for_each(|x| *x = *x / T::from_usize(component1.len).unwrap());
+            .for_each(|x| *x /= T::from_usize(component1.len).unwrap());
         component2
             .state
             .as_mut()
             .iter_mut()
-            .for_each(|x| *x = *x / T::from_usize(component2.len).unwrap());
-            
+            .for_each(|x| *x /= T::from_usize(component2.len).unwrap());
+
         *cur_step += 1;
     }
 

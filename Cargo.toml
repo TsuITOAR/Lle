@@ -7,8 +7,7 @@ edition = "2021"
 
 [dependencies]
 rustfft = "^6.1"
-rayon = "*"
-typed-builder="^0.16"
+typed-builder="^0.18"
 
 [dev-dependencies]
 jkplot = { git = "https://github.com/TsuITOAR/jkplot" }

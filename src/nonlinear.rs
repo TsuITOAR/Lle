@@ -77,7 +77,7 @@ impl<T: LleNum> NonLinearOp<T> for SPhaMod {
     fn get_value(&mut self, _: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {
         dst.iter_mut()
             .zip(state.iter())
-            .for_each(|(d, s)| *d = Complex::i() * s.norm())
+            .for_each(|(d, s)| *d = Complex::i() * s.norm_sqr())
     }
 }
 

@@ -93,6 +93,7 @@ CompoundNonLinear!( NonLinearOpSub<P1, P2>,-);
 CompoundNonLinear!( NonLinearOpMul<P1, P2>,*);
 CompoundNonLinear!( NonLinearOpDiv<P1, P2>,/);
 
+#[derive(Clone, Debug, Default)]
 pub struct SPhaMod {}
 
 impl<T: LleNum> NonLinearOp<T> for SPhaMod {

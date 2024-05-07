@@ -1,3 +1,4 @@
+#![feature(associated_type_defaults)]
 mod coupled;
 mod linear;
 mod lle;

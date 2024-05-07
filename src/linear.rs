@@ -31,10 +31,36 @@ pub trait LinearOp<T: LleNum>: Sized {
             ph: PhantomData,
         }
     }
+    fn by_ref(&'_ self) -> LinearOpRef<'_, Self> {
+        LinearOpRef { op: self }
+    }
+}
+
+pub struct LinearOpRef<'a, T> {
+    op: &'a T,
+}
+
+impl<T: LleNum, R: LinearOp<T>> LinearOp<T> for LinearOpRef<'_, R> {
+    fn get_value(&self, step: Step, freq: Freq) -> Complex<T> {
+        self.op.get_value(step, freq)
+    }
+}
+
+impl<T: LleNum, O: LinearOp<T>> LinearOp<T> for Option<O> {
+    fn get_value(&self, step: Step, freq: Freq) -> Complex<T> {
+        self.as_ref()
+            .map_or_else(Complex::zero, |x| x.get_value(step, freq))
+    }
 }
 
 fn pow_freq<T: LleNum>(freq: Freq, order: DiffOrder) -> Complex<T> {
     (-Complex::i() * T::from_i32(freq).unwrap()).powu(order)
+}
+
+impl<T: LleNum> LinearOp<T> for Complex<T> {
+    fn get_value(&self, _: Step, _: Freq) -> Complex<T> {
+        *self
+    }
 }
 
 impl<T: LleNum> LinearOp<T> for (DiffOrder, Complex<T>) {
@@ -75,7 +101,6 @@ impl<T: Zero + LleNum> LinearOp<T> for NoneOp<T> {
         T::zero().into()
     }
 }
-
 
 macro_rules! CompoundLinear {
     ($name:ident<$g1:ident, $g2:ident>,$op:tt) => {

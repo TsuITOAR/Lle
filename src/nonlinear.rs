@@ -34,6 +34,28 @@ pub trait NonLinearOp<T: LleNum>: Sized {
     fn mul_scalar(self, mul: T) -> NonLinearOpScaled<T, Self> {
         NonLinearOpScaled { op: self, mul }
     }
+    fn by_mut(&'_ mut self) -> NonLinearOpMut<'_, Self> {
+        NonLinearOpMut { op: self }
+    }
+}
+
+pub struct NonLinearOpMut<'a, T> {
+    op: &'a mut T,
+}
+
+impl<T: LleNum, R: NonLinearOp<T>> NonLinearOp<T> for NonLinearOpMut<'_, R> {
+    fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {
+        self.op.get_value(step, state, dst);
+    }
+}
+
+impl<T: LleNum, O: NonLinearOp<T>> NonLinearOp<T> for Option<O> {
+    fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {
+        match self {
+            Some(op) => op.get_value(step, state, dst),
+            None => dst.iter_mut().for_each(|x| *x = Complex::zero()),
+        }
+    }
 }
 
 pub struct NonLinearOpScaled<T: LleNum, O: NonLinearOp<T>> {
@@ -88,7 +110,7 @@ impl<T: LleNum, F: FnMut(Complex<T>) -> Complex<T>> NonLinearOp<T> for F {
             .for_each(|(d, s)| *d = (self)(*s));
     }
 }
-/* 
+/*
 #[derive(Clone, Debug)]
 pub struct NonLinOp<T, Op> {
     buff: Vec<Complex<T>>,
@@ -134,7 +156,7 @@ impl<T: LleNum, Op: Fn(Complex<T>) -> Complex<T>> NonLinOp<T, Op> {
 impl<T: Zero + LleNum> NonLinearOp<T> for NoneOp<T> {
     fn get_value(&mut self, _: Step, _: &[Complex<T>], _: &mut [Complex<T>]) {}
 }
-/* 
+/*
 pub trait IntoNonlinOps<T: LleNum>: Sized {
     type Op: Fn(Complex<T>) -> Complex<T>;
     fn into_nonlin_ops(self) -> Option<NonLinOp<T, Self::Op>>;

@@ -9,11 +9,10 @@ pub trait CoupleOp<T: LleNum> {
     type LinearF: LinearOp<T> = NoneOp<T>;
     type NonLinear: NonLinearOp<T> = NoneOp<T>;
 
-    
     fn linear_r(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::LinearR> {
         None
     }
-    
+
     /// input is the freq domain state, start with 0 freq, scaled
     fn linear_f(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::LinearF> {
         None
@@ -30,7 +29,7 @@ pub trait CoupleOp<T: LleNum> {
     fn mix(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>]) {}
 
     fn mix_freq(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>]) {}
-    
+
     fn with_linear<C: CoupleOp<T>>(self, linear: C) -> CoupleOpWithLinear<Self, C>
     where
         Self: Sized,
@@ -100,7 +99,7 @@ impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpAdd<C1
     fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
         self.lhs
             .constant(state, step)
-            .map(|x| x + self.rhs.constant(state, step).unwrap_or_else(|| zero()))
+            .map(|x| x + self.rhs.constant(state, step).unwrap_or_else(zero))
     }
     fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
         self.lhs.mix(s1, s2);

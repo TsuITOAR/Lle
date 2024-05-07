@@ -9,21 +9,28 @@ pub trait CoupleOp<T: LleNum> {
     type LinearF: LinearOp<T> = NoneOp<T>;
     type NonLinear: NonLinearOp<T> = NoneOp<T>;
 
-    /// input is the freq domain state, start with 0 freq, scaled
+    
     fn linear_r(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::LinearR> {
         None
     }
+    
+    /// input is the freq domain state, start with 0 freq, scaled
     fn linear_f(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::LinearF> {
         None
     }
+
     fn nonlinear(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::NonLinear> {
         None
     }
+
     fn constant(&self, _state: &[Complex<T>], _step: Step) -> Option<Complex<T>> {
         None
     }
+
     fn mix(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>]) {}
+
     fn mix_freq(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>]) {}
+    
     fn with_linear<C: CoupleOp<T>>(self, linear: C) -> CoupleOpWithLinear<Self, C>
     where
         Self: Sized,
@@ -56,6 +63,52 @@ pub trait CoupleOp<T: LleNum> {
         Self: Sized,
     {
         CoupleOpWithMix { couple: self, mix }
+    }
+    fn add<C: CoupleOp<T>>(self, rhs: C) -> CoupleOpAdd<Self, C>
+    where
+        Self: Sized,
+    {
+        CoupleOpAdd { lhs: self, rhs }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct CoupleOpAdd<C1, C2> {
+    lhs: C1,
+    rhs: C2,
+}
+
+impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpAdd<C1, C2> {
+    type LinearR = LinearOpAdd<T, C1::LinearR, Option<C2::LinearR>>;
+    type LinearF = LinearOpAdd<T, C1::LinearF, Option<C2::LinearF>>;
+    type NonLinear = NonLinearOpAdd<T, C1::NonLinear, Option<C2::NonLinear>>;
+    fn linear_r(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearR> {
+        self.lhs
+            .linear_r(state, step)
+            .map(|lhs| lhs.add(self.rhs.linear_r(state, step)))
+    }
+    fn linear_f(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearF> {
+        self.lhs
+            .linear_f(state, step)
+            .map(|lhs| lhs.add(self.rhs.linear_f(state, step)))
+    }
+    fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
+        self.lhs
+            .nonlinear(state, step)
+            .map(|lhs| lhs.add(self.rhs.nonlinear(state, step)))
+    }
+    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
+        self.lhs
+            .constant(state, step)
+            .map(|x| x + self.rhs.constant(state, step).unwrap_or_else(|| zero()))
+    }
+    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
+        self.lhs.mix(s1, s2);
+        self.rhs.mix(s1, s2);
+    }
+    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
+        self.lhs.mix_freq(s1, s2);
+        self.rhs.mix_freq(s1, s2);
     }
 }
 

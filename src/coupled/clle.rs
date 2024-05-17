@@ -79,9 +79,9 @@ where
         } = component1;
         let state1 = state1.as_mut();
         let coup_nonlin1 = couple.nonlinear(state1, cur_step1);
-        let coup_constant1 = couple.constant(state1, cur_step1);
+        let coup_constant2 = couple.constant(state1, cur_step1);
         let len1 = state1.len();
-        let coup_linear2_r = couple.linear_f(state1, cur_step1);
+        let coup_linear2_r = couple.linear_r(state1, cur_step1);
 
         //####################################################
         let LleSolver {
@@ -95,9 +95,9 @@ where
         } = component2;
         let state2 = state2.as_mut();
         let coup_nonlin2 = couple.nonlinear(state2, cur_step2);
-        let coup_constant2 = couple.constant(state2, cur_step2);
+        let coup_constant1 = couple.constant(state2, cur_step2);
         let len2 = state2.len();
-        let coup_linear1_r = couple.linear_f(state2, cur_step2);
+        let coup_linear1_r = couple.linear_r(state2, cur_step2);
 
         //####################################################
         // There are situations that the linear term is not shown,
@@ -138,13 +138,13 @@ where
         state1.iter_mut().for_each(|x| {
             *x = *x / T::from_usize(len1).unwrap()
                 + (constant1.unwrap_or_else(Complex::zero)
-                    + coup_constant2.unwrap_or_else(Complex::zero))
+                    + coup_constant1.unwrap_or_else(Complex::zero))
                     * *step_dist1
         });
         state2.iter_mut().for_each(|x| {
             *x = *x / T::from_usize(len2).unwrap()
                 + (constant2.unwrap_or_else(Complex::zero)
-                    + coup_constant1.unwrap_or_else(Complex::zero))
+                    + coup_constant2.unwrap_or_else(Complex::zero))
                     * *step_dist2
         });
 

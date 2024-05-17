@@ -19,6 +19,20 @@ where
     pub(crate) cur_step: Step,
 }
 
+impl<T: LleNum, S: Clone, Linear: Clone, NonLin: Clone> Clone for LleSolver<T, S, Linear, NonLin> {
+    fn clone(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+            linear: self.linear.clone(),
+            nonlin: self.nonlin.clone(),
+            constant: self.constant.clone(),
+            step_dist: self.step_dist,
+            fft: None,
+            cur_step: 0,
+        }
+    }
+}
+
 impl<T: LleNum, S, Linear, NonLin> LleSolver<T, S, Linear, NonLin> {
     pub fn linear_mut(&mut self) -> &mut Option<Linear> {
         &mut self.linear
@@ -31,7 +45,6 @@ impl<T: LleNum, S, Linear, NonLin> LleSolver<T, S, Linear, NonLin> {
     }
 }
 
-   
 impl<T, S, Linear, NonLin> Evolver<T> for LleSolver<T, S, Linear, NonLin>
 where
     T: LleNum,

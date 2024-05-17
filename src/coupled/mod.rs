@@ -26,9 +26,9 @@ pub trait CoupleOp<T: LleNum> {
         None
     }
 
-    fn mix(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>]) {}
+    fn mix(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>], _step_dist: T) {}
 
-    fn mix_freq(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>]) {}
+    fn mix_freq(&self, _s1: &mut [Complex<T>], _s2: &mut [Complex<T>], _step_dist: T) {}
 
     fn with_linear<C: CoupleOp<T>>(self, linear: C) -> CoupleOpWithLinear<Self, C>
     where
@@ -73,8 +73,8 @@ pub trait CoupleOp<T: LleNum> {
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CoupleOpAdd<C1, C2> {
-    lhs: C1,
-    rhs: C2,
+    pub lhs: C1,
+    pub rhs: C2,
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpAdd<C1, C2> {
@@ -101,20 +101,20 @@ impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpAdd<C1
             .constant(state, step)
             .map(|x| x + self.rhs.constant(state, step).unwrap_or_else(zero))
     }
-    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
-        self.lhs.mix(s1, s2);
-        self.rhs.mix(s1, s2);
+    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.lhs.mix(s1, s2, step_dist);
+        self.rhs.mix(s1, s2, step_dist);
     }
-    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
-        self.lhs.mix_freq(s1, s2);
-        self.rhs.mix_freq(s1, s2);
+    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.lhs.mix_freq(s1, s2, step_dist);
+        self.rhs.mix_freq(s1, s2, step_dist);
     }
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CoupleOpWithLinear<C1, C2> {
-    couple: C1,
-    linear: C2,
+    pub couple: C1,
+    pub linear: C2,
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithLinear<C1, C2> {
@@ -133,15 +133,18 @@ impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithLi
     fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
         self.couple.constant(state, step)
     }
-    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
-        self.couple.mix(s1, s2)
+    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.couple.mix(s1, s2, step_dist)
+    }
+    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.couple.mix_freq(s1, s2, step_dist)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CoupleOpWithNonLinear<C1, C2> {
-    couple: C1,
-    nonlinear: C2,
+    pub couple: C1,
+    pub nonlinear: C2,
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithNonLinear<C1, C2> {
@@ -160,15 +163,18 @@ impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithNo
     fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
         self.couple.constant(state, step)
     }
-    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
-        self.couple.mix(s1, s2)
+    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.couple.mix(s1, s2, step_dist)
+    }
+    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.couple.mix(s1, s2, step_dist)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CoupleOpWithConstant<C1, C2> {
-    couple: C1,
-    constant: C2,
+    pub couple: C1,
+    pub constant: C2,
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithConstant<C1, C2> {
@@ -187,15 +193,18 @@ impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithCo
     fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
         self.constant.constant(state, step)
     }
-    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
-        self.couple.mix(s1, s2)
+    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.couple.mix(s1, s2, step_dist)
+    }
+    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.couple.mix(s1, s2, step_dist)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CoupleOpWithMix<C1, C2> {
-    couple: C1,
-    mix: C2,
+    pub couple: C1,
+    pub mix: C2,
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithMix<C1, C2> {
@@ -214,11 +223,11 @@ impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithMi
     fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
         self.couple.constant(state, step)
     }
-    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
-        self.mix.mix(s1, s2)
+    fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.mix.mix(s1, s2, step_dist)
     }
-    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>]) {
-        self.mix.mix_freq(s1, s2)
+    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        self.mix.mix_freq(s1, s2, step_dist)
     }
 }
 
@@ -243,13 +252,17 @@ impl<T: LleNum> CoupleOp<T> for XPhaMod {
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct ModeSplit<T: LleNum> {
-    mode: usize,
-    strength: T,
+    pub mode: i32,
+    pub strength: T,
 }
 
 impl<T: LleNum> CoupleOp<T> for ModeSplit<T> {
-    fn constant(&self, state: &[Complex<T>], _step: Step) -> Option<Complex<T>> {
-        Some(Complex::i() * self.strength * state[self.mode])
+    fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
+        let Self { mode, strength } = self;
+        let mode = mode.rem_euclid(s1.len() as _) as usize;
+        let temp = s1[mode];
+        s1[mode] += Complex::i() * strength * step_dist * s2[mode];
+        s2[mode] += Complex::i() * strength * step_dist * temp;
     }
 }
 

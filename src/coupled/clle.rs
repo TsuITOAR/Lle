@@ -16,6 +16,7 @@ pub struct CoupledLleSolver<
     pub component1: LleSolver<T, S1, Linear1, NonLin1>,
     pub component2: LleSolver<T, S2, Linear2, NonLin2>,
     pub couple: Couple,
+    #[builder(default = 0, setter(skip))]
     cur_step: u32,
 }
 
@@ -127,7 +128,7 @@ where
 
         //####################################################
 
-        couple.mix_freq(state1, state2);
+        couple.mix_freq(state1, state2, *step_dist1);
 
         //####################################################
         fft1.1.process(state1);
@@ -137,13 +138,13 @@ where
         state1.iter_mut().for_each(|x| {
             *x = *x / T::from_usize(len1).unwrap()
                 + (constant1.unwrap_or_else(Complex::zero)
-                    + coup_constant1.unwrap_or_else(Complex::zero))
+                    + coup_constant2.unwrap_or_else(Complex::zero))
                     * *step_dist1
         });
         state2.iter_mut().for_each(|x| {
             *x = *x / T::from_usize(len2).unwrap()
                 + (constant2.unwrap_or_else(Complex::zero)
-                    + coup_constant2.unwrap_or_else(Complex::zero))
+                    + coup_constant1.unwrap_or_else(Complex::zero))
                     * *step_dist2
         });
 
@@ -173,7 +174,7 @@ where
             ),
         }
 
-        couple.mix(state1, state2);
+        couple.mix(state1, state2, *step_dist1);
 
         *cur_step += 1;
     }

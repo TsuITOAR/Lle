@@ -43,6 +43,7 @@ fn bench_linear(size: usize) {
         .state(get_init(size))
         .step_dist(STEP_DIST)
         .linear(linear)
+        //.nonlin(lle::NoneOp::default())
         .build();
     solver.evolve_n(STEP);
 }

@@ -130,7 +130,7 @@ impl<T> Default for NoneOp<T> {
 
 impl<T: Zero + LleNum> LinearOp<T> for NoneOp<T> {
     fn get_value(&self, _step: Step, _freq: Freq) -> Complex<T> {
-        unreachable!()
+        unreachable!("LinearOp::get_value called on NoneOp")
     }
     const SKIP: bool = true;
 }

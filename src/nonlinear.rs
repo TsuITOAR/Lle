@@ -176,7 +176,7 @@ impl<T: LleNum, Op: Fn(Complex<T>) -> Complex<T>> NonLinOp<T, Op> {
 
 impl<T: Zero + LleNum> NonLinearOp<T> for NoneOp<T> {
     fn get_value(&mut self, _: Step, _: &[Complex<T>], _: &mut [Complex<T>]) {
-        unreachable!()
+        unreachable!("NonLinearOp::get_value called on NoneOp")
     }
     const SKIP: bool = true;
 }

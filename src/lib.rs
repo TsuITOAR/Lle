@@ -217,28 +217,6 @@ impl<T: LleNum> BufferedFft<T> {
     }
 }
 
-// !WARN:this function will scale every element 'len' times due to fft
-fn apply_linear<T: LleNum, L: LinearOp<T>>(
-    state: &mut [Complex<T>],
-    linear: &L,
-    len: usize,
-    fft: &mut (BufferedFft<T>, BufferedFft<T>),
-    step_dist: T,
-    cur_step: Step,
-) {
-    let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len
-    fft.0.process(state);
-    let (pos_freq, neg_freq) = state.split_at_mut(split_pos);
-    neg_freq
-        .iter_mut()
-        .chain(pos_freq.iter_mut())
-        .enumerate()
-        .for_each(|x| {
-            *x.1 *= (linear.get_value(cur_step, x.0 as i32 - (len - split_pos) as i32) * step_dist)
-                .exp()
-        });
-    fft.1.process(state);
-}
 
 // !WARN:this function will scale every element 'len' times due to fft
 /* 

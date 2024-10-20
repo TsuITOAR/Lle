@@ -37,7 +37,26 @@ pub trait NonLinearOp<T: LleNum>: Sized {
     fn by_mut(&'_ mut self) -> NonLinearOpMut<'_, Self> {
         NonLinearOpMut { op: self }
     }
+    const SKIP: bool = false;
 }
+
+pub(crate) trait NonLinearOpExt<T: LleNum>: NonLinearOp<T> {
+    fn apply(&mut self, state: &mut [Complex<T>], cur_step: Step, step_dist: T) {
+        if Self::SKIP {
+            return;
+        }
+        let len = state.len();
+        let mut buf = vec![Complex::zero(); len];
+
+        self.get_value(cur_step, state, &mut buf);
+        state
+            .iter_mut()
+            .zip(buf.iter())
+            .for_each(|x| *x.0 *= (x.1 * step_dist).exp())
+    }
+}
+
+impl<T: LleNum, O: NonLinearOp<T>> NonLinearOpExt<T> for O {}
 
 pub struct NonLinearOpMut<'a, T> {
     op: &'a mut T,
@@ -84,6 +103,7 @@ macro_rules! CompoundNonLinear {
                 self.op2.get_value(step,state,&mut buf2);
                 dst.iter_mut().zip(buf1.iter().zip(buf2.iter())).for_each(|(d,(b1,b2))|*d=b1 $op b2);
             }
+            const SKIP: bool = $g1::SKIP || $g2::SKIP;
         }
     };
 }
@@ -155,7 +175,10 @@ impl<T: LleNum, Op: Fn(Complex<T>) -> Complex<T>> NonLinOp<T, Op> {
  */
 
 impl<T: Zero + LleNum> NonLinearOp<T> for NoneOp<T> {
-    fn get_value(&mut self, _: Step, _: &[Complex<T>], _: &mut [Complex<T>]) {}
+    fn get_value(&mut self, _: Step, _: &[Complex<T>], _: &mut [Complex<T>]) {
+        unreachable!()
+    }
+    const SKIP: bool = true;
 }
 /*
 pub trait IntoNonlinOps<T: LleNum>: Sized {

@@ -34,7 +34,39 @@ pub trait LinearOp<T: LleNum>: Sized {
     fn by_ref(&'_ self) -> LinearOpRef<'_, Self> {
         LinearOpRef { op: self }
     }
+    const SKIP: bool = false;
 }
+
+pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
+    // !WARN:this function will scale every element 'len' times due to fft
+    fn apply(
+        &self,
+        state: &mut [Complex<T>],
+        len: usize,
+        fft: &mut (BufferedFft<T>, BufferedFft<T>),
+        cur_step: Step,
+        step_dist: T,
+    ) {
+        if Self::SKIP {
+            return;
+        }
+        let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len
+        fft.0.process(state);
+        let (pos_freq, neg_freq) = state.split_at_mut(split_pos);
+        neg_freq
+            .iter_mut()
+            .chain(pos_freq.iter_mut())
+            .enumerate()
+            .for_each(|x| {
+                *x.1 *= (self.get_value(cur_step, x.0 as i32 - (len - split_pos) as i32)
+                    * step_dist)
+                    .exp()
+            });
+        fft.1.process(state);
+    }
+}
+
+impl<T: LleNum, L: LinearOp<T>> LinearOpExt<T> for L {}
 
 pub struct LinearOpRef<'a, T> {
     op: &'a T,
@@ -98,8 +130,9 @@ impl<T> Default for NoneOp<T> {
 
 impl<T: Zero + LleNum> LinearOp<T> for NoneOp<T> {
     fn get_value(&self, _step: Step, _freq: Freq) -> Complex<T> {
-        T::zero().into()
+        unreachable!()
     }
+    const SKIP: bool = true;
 }
 
 macro_rules! CompoundLinear {
@@ -113,6 +146,7 @@ macro_rules! CompoundLinear {
             fn get_value(&self,step:Step,freq:Freq)->Complex<T>{
                 self.op1.get_value(step,freq) $op self.op2.get_value(step,freq)
             }
+            const SKIP: bool = $g1::SKIP || $g2::SKIP;
         }
     };
 }

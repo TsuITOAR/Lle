@@ -1,4 +1,4 @@
-#![cfg(not(debug_assertions))]
+//#![cfg(not(debug_assertions))]
 
 use std::path::PathBuf;
 
@@ -34,18 +34,18 @@ fn static_linear() {
     let nonlin = |x: Complex64| Complex::i() * x.norm_sqr();
     let linear = (0, -(Complex64::i() * ALPHA_START + 1.)).add((2, -Complex64::i() * LINEAR / 2.));
 
-    let mut s = LleSolver::new(
-        get_ini(),
-        STEP_DIST,
-        linear,
-        nonlin,
-        Complex64::from(CONSTANT),
-    );
+    let mut s = LleSolver::builder()
+        .state(get_ini())
+        .step_dist(STEP_DIST)
+        .linear(linear)
+        .nonlin(nonlin)
+        .constant(Complex64::from(CONSTANT))
+        .build();
+
     use jkplot::ColorMapVisualizer;
-    let mut visualizer = ColorMapVisualizer::new(
-        get_file_path(concat!(function_name!(), ".png")),
-        (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2),
-    );
+    let path = get_file_path(concat!(function_name!(), ".png"));
+    let mut visualizer =
+        ColorMapVisualizer::new(&path, (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2));
     let mut frame = 0;
     s.evolve_n_with_monitor(STEP_NUM, |s| {
         if frame % MONITOR_STEP == 0 {
@@ -53,7 +53,7 @@ fn static_linear() {
         }
         frame += 1;
     });
-    visualizer.draw();
+    visualizer.draw().unwrap();
 }
 
 #[test]
@@ -65,18 +65,17 @@ fn moving_linear() {
     let linear =
         (|step: Step, _| -(Complex64::i() * (ALPHA_START + alpha_step * step as f64) + 1.))
             .add((2, -Complex64::i() * LINEAR / 2.));
-    let mut s = LleSolver::new(
-        get_ini(),
-        STEP_DIST,
-        linear,
-        nonlin,
-        Complex64::from(CONSTANT),
-    );
+    let mut s = LleSolver::builder()
+        .state(get_ini())
+        .step_dist(STEP_DIST)
+        .linear(linear)
+        .nonlin(nonlin)
+        .constant(Complex64::from(CONSTANT))
+        .build();
     use jkplot::ColorMapVisualizer;
-    let mut visualizer = ColorMapVisualizer::new(
-        get_file_path(concat!(function_name!(), ".png")),
-        (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2),
-    );
+    let path = get_file_path(concat!(function_name!(), ".png"));
+    let mut visualizer =
+        ColorMapVisualizer::new(&path, (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2));
     let mut frame = 0;
     s.evolve_n_with_monitor(STEP_NUM, |s| {
         if frame % MONITOR_STEP == 0 {
@@ -84,7 +83,7 @@ fn moving_linear() {
         }
         frame += 1;
     });
-    visualizer.draw();
+    visualizer.draw().unwrap();
 }
 
 #[test]
@@ -103,18 +102,17 @@ fn step_linear() {
             }
     })
     .add((2, -Complex64::i() * LINEAR / 2.));
-    let mut s = LleSolver::new(
-        get_ini(),
-        STEP_DIST,
-        linear,
-        nonlin,
-        Complex64::from(CONSTANT),
-    );
+    let mut s = LleSolver::builder()
+        .state(get_ini())
+        .step_dist(STEP_DIST)
+        .linear(linear)
+        .nonlin(nonlin)
+        .constant(Complex64::from(CONSTANT))
+        .build();
     use jkplot::ColorMapVisualizer;
-    let mut visualizer = ColorMapVisualizer::new(
-        get_file_path(concat!(function_name!(), ".png")),
-        (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2),
-    );
+    let path = get_file_path(concat!(function_name!(), ".png"));
+    let mut visualizer =
+        ColorMapVisualizer::new(&path, (ARRAY_SIZE as u32 * 2, ARRAY_SIZE as u32 * 2));
     let mut frame = 0;
     s.evolve_n_with_monitor(STEP_NUM, |s| {
         if frame % MONITOR_STEP == 0 {
@@ -122,5 +120,5 @@ fn step_linear() {
         }
         frame += 1;
     });
-    visualizer.draw();
+    visualizer.draw().unwrap();
 }

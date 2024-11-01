@@ -250,7 +250,7 @@ impl<T: LleNum> CoupleOp<T> for XPhaMod {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, typed_builder::TypedBuilder)]
 pub struct ModeSplit<T: LleNum> {
     pub mode: i32,
     pub strength: T,

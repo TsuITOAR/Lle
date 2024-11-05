@@ -29,6 +29,7 @@ fn get_file_path<F: AsRef<str>>(f: F) -> PathBuf {
 
 #[test]
 #[named]
+#[allow(unused_must_use)]
 fn static_linear() {
     const STEP_NUM: u32 = 25_000;
     let nonlin = |x: Complex64| Complex::i() * x.norm_sqr();
@@ -58,6 +59,7 @@ fn static_linear() {
 
 #[test]
 #[named]
+#[allow(unused_must_use)]
 fn moving_linear() {
     const STEP_NUM: u32 = 250_000;
     let nonlin = |x: Complex64| Complex::i() * x.norm_sqr();
@@ -88,6 +90,7 @@ fn moving_linear() {
 
 #[test]
 #[named]
+#[allow(unused_must_use)]
 fn step_linear() {
     const DELTA: f64 = 2.;
     const STEP_NUM: u32 = 250_000;

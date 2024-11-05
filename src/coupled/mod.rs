@@ -259,6 +259,9 @@ pub struct ModeSplit<T: LleNum> {
 impl<T: LleNum> CoupleOp<T> for ModeSplit<T> {
     fn mix_freq(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
         let Self { mode, strength } = self;
+        if strength.is_zero() {
+            return;
+        }
         let mode = mode.rem_euclid(s1.len() as _) as usize;
         let temp = s1[mode];
         s1[mode] += Complex::i() * strength * step_dist * s2[mode].conj();

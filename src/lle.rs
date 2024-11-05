@@ -67,17 +67,14 @@ where
                 self.step_dist,
             );
             let c = self.constant.unwrap_or_else(|| T::zero().into());
-            self.state
-                .as_mut()
-                .iter_mut()
-                .for_each(|x| *x = *x / T::from_usize(len).unwrap() + c * self.step_dist);
+            apply_constant_scale(
+                self.state.as_mut(),
+                c,
+                T::from_usize(len).unwrap(),
+                self.step_dist,
+            );
         } else if let Some(c) = self.constant {
-            if c != T::zero().into() {
-                self.state
-                    .as_mut()
-                    .iter_mut()
-                    .for_each(|x| *x += c * self.step_dist)
-            }
+            apply_constant(self.state.as_mut(), c, self.step_dist);
         }
         self.cur_step += 1;
     }

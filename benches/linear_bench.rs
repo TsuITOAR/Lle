@@ -49,7 +49,7 @@ fn bench_linear(size: usize) {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let mut group = c.benchmark_group("linear iter size");
+    let mut group = c.benchmark_group("linear size");
     for i in 0..8 {
         let size = 128 * 2usize.pow(i);
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, s| {

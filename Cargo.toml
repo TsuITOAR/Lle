@@ -40,5 +40,9 @@ harness = false
 name = "nonlin_bench"
 harness = false
 
+[[bench]]
+name = "iterator_linear"
+harness = false
+
 [lib]
 bench = false

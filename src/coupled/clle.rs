@@ -108,7 +108,7 @@ where
         // when couple doesn't have linear term and the component doesn't have linear term
         // but it's very uncommon, so I will just ignore it
         let fft1 = fft1.get_or_insert_with(|| BufferedFft::new(len1));
-        fft1.0.process(state1);
+        fft1.0.fft_process(state1);
         apply_linear_freq(
             state1,
             &linear1.by_ref().add(coup_linear1),
@@ -118,7 +118,7 @@ where
 
         //####################################################
         let fft2 = fft2.get_or_insert_with(|| BufferedFft::new(len2));
-        fft2.0.process(state2);
+        fft2.0.fft_process(state2);
 
         apply_linear_freq(
             state2,
@@ -132,22 +132,23 @@ where
         couple.mix_freq(state1, state2, *step_dist1);
 
         //####################################################
-        fft1.1.process(state1);
-        fft2.1.process(state2);
+        fft1.1.fft_process(state1);
+        fft2.1.fft_process(state2);
 
         //####################################################
-        state1.iter_mut().for_each(|x| {
-            *x = *x / T::from_usize(len1).unwrap()
-                + (constant1.unwrap_or_else(Complex::zero)
-                    + coup_constant1.unwrap_or_else(Complex::zero))
-                    * *step_dist1
-        });
-        state2.iter_mut().for_each(|x| {
-            *x = *x / T::from_usize(len2).unwrap()
-                + (constant2.unwrap_or_else(Complex::zero)
-                    + coup_constant2.unwrap_or_else(Complex::zero))
-                    * *step_dist2
-        });
+        apply_constant_scale(
+            state1,
+            constant1.unwrap_or_else(Complex::zero) + coup_constant1.unwrap_or_else(Complex::zero),
+            T::from_usize(len1).unwrap(),
+            *step_dist1,
+        );
+
+        apply_constant_scale(
+            state2,
+            constant2.unwrap_or_else(Complex::zero) + coup_constant2.unwrap_or_else(Complex::zero),
+            T::from_usize(len2).unwrap(),
+            *step_dist2,
+        );
 
         match (nonlin1, coup_nonlin1) {
             (None, None) => (),

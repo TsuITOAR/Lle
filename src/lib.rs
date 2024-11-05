@@ -1,4 +1,5 @@
 #![feature(associated_type_defaults)]
+#![feature(type_alias_impl_trait)]
 mod coupled;
 mod linear;
 mod lle;
@@ -118,7 +119,9 @@ impl<T: LleNum> BufferedFft<T> {
         )
     }
 
-    pub fn process(&mut self, data: &mut [Complex<T>]) {
+    pub fn fft_process(&mut self, data: &mut [Complex<T>]) {
+        #[cfg(feature = "puffin")]
+        puffin::profile_function!();
         self.fft.process_with_scratch(data, &mut self.buf)
     }
 }
@@ -148,6 +151,35 @@ fn par_apply_linear<T: LleNum, L: LinearOp<T> + Sync>(
 }
  */
 
+pub fn apply_constant<T>(state: &mut [Complex<T>], constant: Complex<T>, step_dist: T)
+where
+    T: LleNum,
+{
+    if constant == T::zero().into() {
+        return;
+    }
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+
+    state.iter_mut().for_each(|x| *x += constant * step_dist);
+}
+
+pub fn apply_constant_scale<T>(
+    state: &mut [Complex<T>],
+    constant: Complex<T>,
+    scale: T,
+    step_dist: T,
+) where
+    T: LleNum,
+{
+    debug_assert!(!scale.is_zero());
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+
+    state
+        .iter_mut()
+        .for_each(|x| *x = *x / scale + constant * step_dist);
+}
 // input state_freq should not be fft shifted before
 pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
     state_freq: &mut [Complex<T>],
@@ -183,6 +215,11 @@ pub fn mix<T: LleNum, C: CoupleOp<T>>(
     puffin::profile_function!();
 
     c.mix(state1, state2, step_dist);
+}
+
+pub fn freq_at(len: usize, i: usize) -> Freq {
+    let split_pos = (len + 1) / 2;
+    ((i + len - split_pos) % len) as Freq - (len - split_pos) as Freq
 }
 
 const ILP_STREAM: usize = 8;

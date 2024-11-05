@@ -53,9 +53,9 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
             return;
         }
 
-        fft.0.process(state);
+        fft.0.fft_process(state);
         self.apply_freq(state, step_dist, cur_step);
-        fft.1.process(state);
+        fft.1.fft_process(state);
     }
 
     // input state_freq should not be fft shifted before
@@ -63,19 +63,28 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
         if self.skip() {
             return;
         }
-        let len = state_freq.len();
-        let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len;
-        let (pos_freq, neg_freq) = state_freq.split_at_mut(split_pos);
-        neg_freq
-            .iter_mut()
-            .chain(pos_freq.iter_mut())
-            .enumerate()
-            .for_each(|x| {
-                *x.1 *= (self.get_value(cur_step, x.0 as i32 - (len - split_pos) as i32)
-                    * step_dist)
-                    .exp()
-            });
+        shift_freq(state_freq).for_each(|(f, x)| {
+            *x *= (self.get_value(cur_step, f) * step_dist).exp();
+        });
     }
+}
+use std::iter::{Chain, Enumerate, Map};
+use std::slice::IterMut;
+
+pub type ShiftFreqIter<'a, T> = Map<
+    Enumerate<Chain<std::slice::IterMut<'a, T>, IterMut<'a, T>>>,
+    impl FnMut((usize, &'a mut T)) -> (Freq, &'a mut T) + 'a,
+>;
+
+pub fn shift_freq<T>(freq: &mut [T]) -> ShiftFreqIter<'_, T> {
+    let len = freq.len();
+    let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len;
+    let (pos_freq, neg_freq) = freq.split_at_mut(split_pos);
+    neg_freq
+        .iter_mut()
+        .chain(pos_freq.iter_mut())
+        .enumerate()
+        .map(move |(i, x)| (i as Freq - (len - split_pos) as Freq, x))
 }
 
 impl<T: LleNum, L: LinearOp<T>> LinearOpExt<T> for L {}

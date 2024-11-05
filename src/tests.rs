@@ -116,3 +116,51 @@ fn fft_scale_check() {
     let e_freq = freq.iter().fold(zero(), |t: f64, x| t + x.norm_sqr()) / array.len() as f64;
     assert_eq!(e_real, e_freq);
 }
+
+#[test]
+fn check_freq_index() {
+    fn freq_at1(len: usize, i: usize) -> Freq {
+        let split = (len + 1) / 2;
+        if i < split {
+            i as Freq
+        } else {
+            i as Freq - len as Freq
+        }
+    }
+    for len in [5, 6, 7] {
+        for i in [1, 2, 3, 4] {
+            assert_eq!(freq_at(len, i), freq_at1(len, i));
+        }
+    }
+}
+
+#[test]
+fn check_freq_index2() {
+    fn d((i, x): (i32, &mut f32)) {
+        *x *= i as f32;
+    }
+    fn modify1(state_freq: &mut [f32]) {
+        shift_freq(state_freq).for_each(d);
+    }
+    fn modify2(state_freq: &mut [f32]) {
+        let len = state_freq.len();
+        state_freq
+            .iter_mut()
+            .enumerate()
+            .map(|x| (freq_at(len, x.0), x.1))
+            .for_each(d);
+    }
+
+    let data = [1., 2., 3., 1., 2., 5., 87., 32., 7., 0., -1.];
+    let mut data1 = data.clone();
+    modify1(&mut data1);
+    let mut data2 = data.clone();
+    modify2(&mut data2);
+    assert_eq!(data1, data2);
+    let data = [1., 2., 3., 2., 5., 87., 32., 7., 0., -1.];
+    let mut data1 = data.clone();
+    modify1(&mut data1);
+    let mut data2 = data.clone();
+    modify2(&mut data2);
+    assert_eq!(data1, data2);
+}

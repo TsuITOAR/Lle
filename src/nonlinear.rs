@@ -38,11 +38,14 @@ pub trait NonLinearOp<T: LleNum>: Sized {
         NonLinearOpMut { op: self }
     }
     const SKIP: bool = false;
+    fn skip(&self) -> bool {
+        Self::SKIP
+    }
 }
 
 pub(crate) trait NonLinearOpExt<T: LleNum>: NonLinearOp<T> {
     fn apply(&mut self, state: &mut [Complex<T>], cur_step: Step, step_dist: T) {
-        if Self::SKIP {
+        if self.skip() {
             return;
         }
         let len = state.len();

@@ -25,7 +25,7 @@ impl<T: LleNum, S: Clone, Linear: Clone, NonLin: Clone> Clone for LleSolver<T, S
             state: self.state.clone(),
             linear: self.linear.clone(),
             nonlin: self.nonlin.clone(),
-            constant: self.constant.clone(),
+            constant: self.constant,
             step_dist: self.step_dist,
             fft: None,
             cur_step: 0,
@@ -62,7 +62,6 @@ where
         if let Some(ref linear) = self.linear {
             linear.apply(
                 self.state.as_mut(),
-                len,
                 self.fft.get_or_insert_with(|| BufferedFft::new(len)),
                 self.cur_step,
                 self.step_dist,

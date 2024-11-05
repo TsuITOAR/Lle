@@ -20,109 +20,7 @@ use rustfft::{Fft, FftNum};
 pub use rustfft::{self, num_complex, num_traits};
 
 #[cfg(test)]
-mod tests {
-    use crate::{Evolver, LinearOp, LleSolver, NoneOp, Step};
-    use rustfft::num_complex::Complex64;
-    #[test]
-    fn linear_ops() {
-        let linear1 = (1, Complex64::from(1.));
-        assert_eq!(linear1.get_value(1, 1), 1. * (-Complex64::i() * 1.).powu(1));
-        assert_eq!(linear1.get_value(3, 2), 1. * (-Complex64::i() * 2.).powu(1));
-
-        let linear2 = (3, Complex64::from(2.));
-        assert_eq!(linear2.get_value(1, 1), 2. * (-Complex64::i() * 1.).powu(3));
-        assert_eq!(linear2.get_value(2, 3), 2. * (-Complex64::i() * 3.).powu(3));
-
-        let linear3 = linear1.clone().add(linear2.clone());
-        assert_eq!(
-            linear3.get_value(1, 3),
-            linear1.get_value(1, 3) + linear2.get_value(1, 3)
-        );
-        assert_eq!(
-            linear3.get_value(5, 7),
-            linear1.get_value(5, 7) + linear2.get_value(5, 7)
-        );
-
-        let linear4 = (1u32, |step: Step| Complex64::from(step as f64));
-        assert_eq!(
-            linear4.get_value(2, 4),
-            Complex64::from(2.) * (-Complex64::i() * 4.).powu(1)
-        );
-        assert_eq!(
-            linear4.get_value(3, 7),
-            Complex64::from(3.) * (-Complex64::i() * 7.).powu(1)
-        );
-
-        let linear5 = |step: Step, _pos: i32| Complex64::from(step as f64);
-        assert_eq!(linear5.get_value(1, 3), (1.).into());
-        assert_eq!(linear5.get_value(6, 3), (6.).into());
-    }
-
-    /*  #[test]
-    fn create_solver() {
-        LleSolver::new([Complex64::new(1., 0.); 128], 0.1, none_op(), None, None);
-    } */
-    #[test]
-    fn zero_nonlin_op() {
-        let start = [Complex64::new(1., 0.)];
-        let mut s = LleSolver::<_, _>::builder()
-            .state(start.clone())
-            .step_dist(0.1)
-            .build();
-        s.evolve_n_with_monitor(10, |x| {
-            assert_eq!(start, x, "zero nonlin operation should not change state")
-        });
-    }
-    #[test]
-    fn zero_linear_op() {
-        let start = [Complex64::new(1., 0.); 128];
-        let mut s = LleSolver::<_, _, _>::builder()
-            .state(start.clone())
-            .step_dist(0.1)
-            .linear((1u32, Complex64::from(0.)).add((2, Complex64::from(0.))))
-            .build();
-
-        s.evolve_n_with_monitor(10, |x| {
-            assert_eq!(start, x, "zero linear operation should not change state")
-        });
-    }
-    #[test]
-    fn evolve_some() {
-        let step_dist = 0.1;
-        let mut start = [Complex64::new(1., 0.); 128];
-        start[35] = (0.).into();
-        let mut s = LleSolver::<_, _, _>::builder()
-            .state(start.clone())
-            .step_dist(0.1)
-            .linear((1u32, Complex64::from(1.)).add((2, Complex64::from(1.))))
-            .build();
-
-        s.evolve();
-        assert_ne!(start, s.state(),);
-        let nonlin = |x: Complex64| x.sqrt();
-        let mut s = LleSolver::<_, _, NoneOp<_>, _>::builder()
-            .state(start.clone())
-            .step_dist(0.1)
-            .nonlin(nonlin)
-            .build();
-        s.evolve();
-        assert_ne!(start, s.state(),);
-        let constant = Complex64::from(1.);
-        let mut s = LleSolver::<_, _>::builder()
-            .state(start.clone())
-            .step_dist(0.1)
-            .constant(constant)
-            .build();
-        s.evolve();
-        assert_eq!(
-            start
-                .iter()
-                .map(|x| x + step_dist * constant)
-                .collect::<Vec<_>>(),
-            s.state(),
-        );
-    }
-}
+mod tests;
 
 pub type Step = u32;
 pub type Freq = i32;
@@ -135,9 +33,13 @@ pub trait Evolver<T: LleNum> {
     fn state(&self) -> &[Complex<T>];
     fn state_mut(&mut self) -> &mut [Complex<T>];
     fn evolve_n(&mut self, n: Step) {
+        #[cfg(feature = "puffin")]
+        puffin::profile_function!();
         (0..n).for_each(|_| self.evolve())
     }
     fn evolve_until(&mut self, mut until: impl FnMut(&[Complex<T>]) -> bool) {
+        #[cfg(feature = "puffin")]
+        puffin::profile_function!();
         while !until(self.state()) {
             self.evolve();
         }
@@ -147,6 +49,8 @@ pub trait Evolver<T: LleNum> {
         monitor(self.state())
     }
     fn evolve_n_with_monitor(&mut self, n: Step, mut monitor: impl FnMut(&[Complex<T>])) {
+        #[cfg(feature = "puffin")]
+        puffin::profile_function!();
         (0..n).for_each(|_| self.evolve_with_monitor(&mut monitor))
     }
     fn evolve_until_with_monitor(
@@ -154,12 +58,14 @@ pub trait Evolver<T: LleNum> {
         mut until: impl FnMut(&[Complex<T>]) -> bool,
         mut monitor: impl FnMut(&[Complex<T>]),
     ) {
+        #[cfg(feature = "puffin")]
+        puffin::profile_function!();
         while !until(self.state()) {
             self.evolve_with_monitor(&mut monitor)
         }
     }
 }
-
+/*
 pub trait ParEvolver<T: LleNum> {
     fn par_evolve(&mut self);
     fn state(&self) -> &[Complex<T>];
@@ -188,7 +94,7 @@ pub trait ParEvolver<T: LleNum> {
             self.par_evolve_with_monitor(&mut monitor)
         }
     }
-}
+} */
 
 pub(crate) struct BufferedFft<T: LleNum> {
     fft: Arc<dyn Fft<T>>,
@@ -217,9 +123,8 @@ impl<T: LleNum> BufferedFft<T> {
     }
 }
 
-
 // !WARN:this function will scale every element 'len' times due to fft
-/* 
+/*
 fn par_apply_linear<T: LleNum, L: LinearOp<T> + Sync>(
     state: &mut [Complex<T>],
     linear: &L,
@@ -242,3 +147,42 @@ fn par_apply_linear<T: LleNum, L: LinearOp<T> + Sync>(
     fft.1.process(state);
 }
  */
+
+// input state_freq should not be fft shifted before
+pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
+    state_freq: &mut [Complex<T>],
+    linear: &L,
+    step_dist: T,
+    cur_step: Step,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+
+    linear.apply_freq(state_freq, step_dist, cur_step);
+}
+
+pub fn apply_nonlinear<T: LleNum, NL: NonLinearOp<T>>(
+    state: &mut [Complex<T>],
+    nonlinear: &mut NL,
+    step_dist: T,
+    cur_step: Step,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+
+    nonlinear.apply(state, cur_step, step_dist);
+}
+
+pub fn mix<T: LleNum, C: CoupleOp<T>>(
+    c: &mut C,
+    state1: &mut [Complex<T>],
+    state2: &mut [Complex<T>],
+    step_dist: T,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+
+    c.mix(state1, state2, step_dist);
+}
+
+const ILP_STREAM: usize = 8;

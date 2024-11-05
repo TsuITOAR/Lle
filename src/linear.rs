@@ -35,6 +35,9 @@ pub trait LinearOp<T: LleNum>: Sized {
         LinearOpRef { op: self }
     }
     const SKIP: bool = false;
+    fn skip(&self) -> bool {
+        Self::SKIP
+    }
 }
 
 pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
@@ -42,17 +45,27 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
     fn apply(
         &self,
         state: &mut [Complex<T>],
-        len: usize,
         fft: &mut (BufferedFft<T>, BufferedFft<T>),
         cur_step: Step,
         step_dist: T,
     ) {
-        if Self::SKIP {
+        if self.skip() {
             return;
         }
-        let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len
+
         fft.0.process(state);
-        let (pos_freq, neg_freq) = state.split_at_mut(split_pos);
+        self.apply_freq(state, step_dist, cur_step);
+        fft.1.process(state);
+    }
+
+    // input state_freq should not be fft shifted before
+    fn apply_freq(&self, state_freq: &mut [Complex<T>], step_dist: T, cur_step: Step) {
+        if self.skip() {
+            return;
+        }
+        let len = state_freq.len();
+        let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len;
+        let (pos_freq, neg_freq) = state_freq.split_at_mut(split_pos);
         neg_freq
             .iter_mut()
             .chain(pos_freq.iter_mut())
@@ -62,7 +75,6 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
                     * step_dist)
                     .exp()
             });
-        fft.1.process(state);
     }
 }
 

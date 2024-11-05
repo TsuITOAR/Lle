@@ -2,19 +2,15 @@ use super::*;
 
 mod clle;
 pub use clle::*;
+use iterator_ilp::IteratorILP;
 use rustfft::num_traits::zero;
 
 pub trait CoupleOp<T: LleNum> {
-    type LinearR: LinearOp<T> = NoneOp<T>;
-    type LinearF: LinearOp<T> = NoneOp<T>;
+    type Linear: LinearOp<T> = NoneOp<T>;
     type NonLinear: NonLinearOp<T> = NoneOp<T>;
 
-    fn linear_r(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::LinearR> {
-        None
-    }
-
     /// input is the freq domain state, start with 0 freq, scaled
-    fn linear_f(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::LinearF> {
+    fn linear(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::Linear> {
         None
     }
 
@@ -71,6 +67,31 @@ pub trait CoupleOp<T: LleNum> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ExtractedCoupleOps<T, L, N> {
+    pub linear: Option<L>,
+    pub nonlinear: Option<N>,
+    pub constant: Option<Complex<T>>,
+}
+
+pub(crate) trait CoupleOpExt<T: LleNum>: CoupleOp<T> {
+    fn extract_coup_op(
+        &self,
+        state: &[Complex<T>],
+        step: Step,
+    ) -> ExtractedCoupleOps<T, Self::Linear, Self::NonLinear> {
+        #[cfg(feature = "puffin")]
+        puffin::profile_function!();
+        ExtractedCoupleOps {
+            linear: self.linear(state, step),
+            nonlinear: self.nonlinear(state, step),
+            constant: self.constant(state, step),
+        }
+    }
+}
+
+impl<T: LleNum, C: CoupleOp<T>> CoupleOpExt<T> for C {}
+
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct CoupleOpAdd<C1, C2> {
     pub lhs: C1,
@@ -78,18 +99,12 @@ pub struct CoupleOpAdd<C1, C2> {
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpAdd<C1, C2> {
-    type LinearR = LinearOpAdd<T, C1::LinearR, Option<C2::LinearR>>;
-    type LinearF = LinearOpAdd<T, C1::LinearF, Option<C2::LinearF>>;
+    type Linear = LinearOpAdd<T, C1::Linear, Option<C2::Linear>>;
     type NonLinear = NonLinearOpAdd<T, C1::NonLinear, Option<C2::NonLinear>>;
-    fn linear_r(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearR> {
+    fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
         self.lhs
-            .linear_r(state, step)
-            .map(|lhs| lhs.add(self.rhs.linear_r(state, step)))
-    }
-    fn linear_f(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearF> {
-        self.lhs
-            .linear_f(state, step)
-            .map(|lhs| lhs.add(self.rhs.linear_f(state, step)))
+            .linear(state, step)
+            .map(|lhs| lhs.add(self.rhs.linear(state, step)))
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.lhs
@@ -118,14 +133,10 @@ pub struct CoupleOpWithLinear<C1, C2> {
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithLinear<C1, C2> {
-    type LinearR = C2::LinearR;
-    type LinearF = C2::LinearF;
+    type Linear = C2::Linear;
     type NonLinear = C1::NonLinear;
-    fn linear_r(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearR> {
-        self.linear.linear_r(state, step)
-    }
-    fn linear_f(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearF> {
-        self.linear.linear_f(state, step)
+    fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
+        self.linear.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.couple.nonlinear(state, step)
@@ -148,14 +159,10 @@ pub struct CoupleOpWithNonLinear<C1, C2> {
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithNonLinear<C1, C2> {
-    type LinearR = C1::LinearR;
-    type LinearF = C1::LinearF;
+    type Linear = C1::Linear;
     type NonLinear = C2::NonLinear;
-    fn linear_r(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearR> {
-        self.couple.linear_r(state, step)
-    }
-    fn linear_f(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearF> {
-        self.couple.linear_f(state, step)
+    fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
+        self.couple.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.nonlinear.nonlinear(state, step)
@@ -178,14 +185,10 @@ pub struct CoupleOpWithConstant<C1, C2> {
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithConstant<C1, C2> {
-    type LinearR = C1::LinearR;
-    type LinearF = C1::LinearF;
+    type Linear = C1::Linear;
     type NonLinear = C1::NonLinear;
-    fn linear_r(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearR> {
-        self.couple.linear_r(state, step)
-    }
-    fn linear_f(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearF> {
-        self.couple.linear_f(state, step)
+    fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
+        self.couple.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.couple.nonlinear(state, step)
@@ -208,14 +211,10 @@ pub struct CoupleOpWithMix<C1, C2> {
 }
 
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithMix<C1, C2> {
-    type LinearR = C1::LinearR;
-    type LinearF = C1::LinearF;
+    type Linear = C1::Linear;
     type NonLinear = C1::NonLinear;
-    fn linear_r(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearR> {
-        self.couple.linear_r(state, step)
-    }
-    fn linear_f(&self, state: &[Complex<T>], step: Step) -> Option<Self::LinearF> {
-        self.couple.linear_f(state, step)
+    fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
+        self.couple.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.couple.nonlinear(state, step)
@@ -237,14 +236,18 @@ impl<T: LleNum> CoupleOp<T> for NoneOp<T> {}
 pub struct XPhaMod;
 
 impl<T: LleNum> CoupleOp<T> for XPhaMod {
-    type LinearR = Complex<T>;
+    type Linear = Complex<T>;
 
     type NonLinear = NoneOp<T>;
-    fn linear_r(&self, state: &[Complex<T>], _step: Step) -> Option<Self::LinearR> {
+    fn linear(&self, state: &[Complex<T>], _step: Step) -> Option<Self::Linear> {
         Some(
             Complex::i()
                 * T::from_f64(2.).unwrap()
-                * state.iter().fold(zero(), |t: T, x| t + x.norm_sqr())
+                * state.iter().fold_ilp::<{ crate::ILP_STREAM }, _>(
+                    zero,
+                    |t: T, x| t + x.norm_sqr(),
+                    |t, x| t + x,
+                )
                 / T::from_usize(state.len()).unwrap(),
         )
     }
@@ -269,19 +272,4 @@ impl<T: LleNum> CoupleOp<T> for ModeSplit<T> {
         // s1[mode] += Complex::i() * strength * step_dist * s2[mode];
         // s2[mode] += Complex::i() * strength * step_dist * temp;
     }
-}
-
-#[test]
-fn fft_scale_check() {
-    let array = [1., 2., 3., 4., 5., 6., 7., 8.];
-    let mut fft = rustfft::FftPlanner::new();
-    let fft = fft.plan_fft_forward(array.len());
-    let mut freq = array
-        .iter()
-        .map(|x| Complex::new(*x, 0.))
-        .collect::<Vec<_>>();
-    fft.process(&mut freq);
-    let e_real = array.iter().fold(0., |t, x| t + x * x);
-    let e_freq = freq.iter().fold(zero(), |t: f64, x| t + x.norm_sqr()) / array.len() as f64;
-    assert_eq!(e_real, e_freq);
 }

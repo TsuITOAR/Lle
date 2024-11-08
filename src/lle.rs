@@ -85,22 +85,3 @@ where
         self.state.as_mut()
     }
 }
-
-/* impl<T, S, Linear, NonLin> ParEvolver<T> for LleSolver<T, S, Linear, NonLin>
-where
-    T: LleNum,
-    S: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    Linear: LinearOp<T> + Sync,
-    NonLin: Fn(Complex<T>) -> Complex<T> + Send + Sync,
-{
-    fn par_evolve(&mut self) {
-        LleSolver::par_evolve(self)
-    }
-    fn state(&self) -> &[Complex<T>] {
-        LleSolver::state(self)
-    }
-    fn state_mut(&mut self) -> &mut [Complex<T>] {
-        LleSolver::state_mut(self)
-    }
-}
- */

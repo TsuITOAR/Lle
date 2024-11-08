@@ -1,6 +1,8 @@
 use super::*;
 use std::marker::PhantomData;
 
+
+/// get_value gives v, and the iterator is give by x*=exp(v*(i dpsi/dtheta)^n dt)=exp(v*freq^n dt)
 pub trait LinearOp<T: LleNum>: Sized {
     fn get_value(&self, step: Step, freq: Freq) -> Complex<T>;
     fn add<A: LinearOp<T>>(self, lhs: A) -> LinearOpAdd<T, Self, A> {
@@ -104,10 +106,14 @@ impl<T: LleNum, O: LinearOp<T>> LinearOp<T> for Option<O> {
         self.as_ref()
             .map_or_else(Complex::zero, |x| x.get_value(step, freq))
     }
+
+    fn skip(&self) -> bool {
+        self.is_none()
+    }
 }
 
 fn pow_freq<T: LleNum>(freq: Freq, order: DiffOrder) -> Complex<T> {
-    (-Complex::i() * T::from_i32(freq).unwrap()).powu(order)
+    Complex::from(T::from_i32(freq.pow(order)).unwrap())
 }
 
 impl<T: LleNum> LinearOp<T> for Complex<T> {
@@ -116,6 +122,9 @@ impl<T: LleNum> LinearOp<T> for Complex<T> {
     }
 }
 
+/// omega_l-omega_l0 = D_n/n! *(l-l0)^n
+/// this term should be i * D_n/n!
+/// n, i^n * D_n / n!
 impl<T: LleNum> LinearOp<T> for (DiffOrder, Complex<T>) {
     fn get_value(&self, _: Step, freq: Freq) -> Complex<T> {
         self.1 * pow_freq(freq, self.0)

@@ -5,12 +5,12 @@ use rustfft::num_complex::Complex64;
 #[test]
 fn linear_ops() {
     let linear1 = (1, Complex64::from(1.));
-    assert_eq!(linear1.get_value(1, 1), 1. * (-Complex64::i() * 1.).powu(1));
-    assert_eq!(linear1.get_value(3, 2), 1. * (-Complex64::i() * 2.).powu(1));
+    assert_eq!(linear1.get_value(1, 1), 1. * Complex64::from(1.).powu(1));
+    assert_eq!(linear1.get_value(3, 2), 1. * Complex64::from(2.).powu(1));
 
     let linear2 = (3, Complex64::from(2.));
-    assert_eq!(linear2.get_value(1, 1), 2. * (-Complex64::i() * 1.).powu(3));
-    assert_eq!(linear2.get_value(2, 3), 2. * (-Complex64::i() * 3.).powu(3));
+    assert_eq!(linear2.get_value(1, 1), 2. * Complex64::from(1.).powu(3));
+    assert_eq!(linear2.get_value(2, 3), 2. * Complex64::from(3.).powu(3));
 
     let linear3 = linear1.clone().add(linear2.clone());
     assert_eq!(
@@ -25,11 +25,11 @@ fn linear_ops() {
     let linear4 = (1u32, |step: Step| Complex64::from(step as f64));
     assert_eq!(
         linear4.get_value(2, 4),
-        Complex64::from(2.) * (-Complex64::i() * 4.).powu(1)
+        Complex64::from(2.) * Complex64::from(4.).powu(1)
     );
     assert_eq!(
         linear4.get_value(3, 7),
-        Complex64::from(3.) * (-Complex64::i() * 7.).powu(1)
+        Complex64::from(3.) * Complex64::from(7.).powu(1)
     );
 
     let linear5 = |step: Step, _pos: i32| Complex64::from(step as f64);

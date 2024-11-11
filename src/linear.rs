@@ -1,7 +1,6 @@
 use super::*;
 use std::marker::PhantomData;
 
-
 /// get_value gives v, and the iterator is give by x*=exp(v*(i dpsi/dtheta)^n dt)=exp(v*freq^n dt)
 pub trait LinearOp<T: LleNum>: Sized {
     fn get_value(&self, step: Step, freq: Freq) -> Complex<T>;
@@ -122,9 +121,9 @@ impl<T: LleNum> LinearOp<T> for Complex<T> {
     }
 }
 
-/// omega_l-omega_l0 = D_n/n! *(l-l0)^n
-/// this term should be i * D_n/n!
-/// n, i^n * D_n / n!
+/// - i * (omega_l-omega_l0) = - i * D_n/n! *(l-l0)^n
+/// this term should be - i * D_n/n!
+/// n, - i * D_n / n!
 impl<T: LleNum> LinearOp<T> for (DiffOrder, Complex<T>) {
     fn get_value(&self, _: Step, freq: Freq) -> Complex<T> {
         self.1 * pow_freq(freq, self.0)
@@ -175,6 +174,9 @@ macro_rules! CompoundLinear {
         impl<T:LleNum,$g1:LinearOp<T>,$g2:LinearOp<T>> LinearOp<T> for $name<T,$g1,$g2> {
             fn get_value(&self,step:Step,freq:Freq)->Complex<T>{
                 self.op1.get_value(step,freq) $op self.op2.get_value(step,freq)
+            }
+            fn skip(&self)->bool{
+                self.op1.skip()||self.op2.skip()
             }
             const SKIP: bool = $g1::SKIP || $g2::SKIP;
         }

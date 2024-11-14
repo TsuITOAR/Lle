@@ -12,6 +12,7 @@ puffin = ["dep:puffin"]
 [dependencies]
 iterator_ilp = "2.1.2"
 rustfft = "^6.2"
+num-complex = { version = "^0.4", features = ["serde"] }
 typed-builder = "^0.20"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

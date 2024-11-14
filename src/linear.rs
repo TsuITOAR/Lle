@@ -121,9 +121,13 @@ impl<T: LleNum> LinearOp<T> for Complex<T> {
     }
 }
 
+/// 
 /// - i * (omega_l-omega_l0) = - i * D_n/n! *(l-l0)^n
+/// 
 /// this term should be - i * D_n/n!
-/// n, - i * D_n / n!
+/// 
+/// (n, - i * D_n / n!)
+/// 
 impl<T: LleNum> LinearOp<T> for (DiffOrder, Complex<T>) {
     fn get_value(&self, _: Step, freq: Freq) -> Complex<T> {
         self.1 * pow_freq(freq, self.0)

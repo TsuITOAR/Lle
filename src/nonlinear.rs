@@ -93,6 +93,7 @@ impl<T: LleNum, O: NonLinearOp<T>> NonLinearOp<T> for NonLinearOpScaled<T, O> {
 
 macro_rules! CompoundNonLinear {
     ($name:ident<$g1:ident, $g2:ident>,$op:tt) => {
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         pub struct $name<T:LleNum,$g1:NonLinearOp<T>,$g2:NonLinearOp<T>> {
             op1:$g1,
             op2:$g2,

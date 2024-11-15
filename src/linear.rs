@@ -35,9 +35,40 @@ pub trait LinearOp<T: LleNum>: Sized {
     fn by_ref(&'_ self) -> LinearOpRef<'_, Self> {
         LinearOpRef { op: self }
     }
+    fn cached(self, len: usize) -> LinearOpCached<T> {
+        LinearOpCached::new(self, len)
+    }
     const SKIP: bool = false;
     fn skip(&self) -> bool {
         Self::SKIP
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LinearOpCached<T> {
+    cache: Vec<Complex<T>>,
+}
+
+impl<T: LleNum> LinearOpCached<T> {
+    pub fn new<L: LinearOp<T>>(op: L, len: usize) -> Self {
+        debug_assert_eq!(
+            op.get_value(0, 0),
+            op.get_value(1, 0),
+            "Only ops independent of step can be cached"
+        );
+        Self {
+            cache: (0..len)
+                .into_iter()
+                .map(|x| op.get_value(0, freq_at(len, x)))
+                .collect(),
+        }
+    }
+}
+
+impl<T: LleNum> LinearOp<T> for LinearOpCached<T> {
+    fn get_value(&self, _step: Step, freq: Freq) -> Complex<T> {
+        let len = self.cache.len();
+        self.cache[freq.rem_euclid(len as _) as usize]
     }
 }
 
@@ -121,13 +152,13 @@ impl<T: LleNum> LinearOp<T> for Complex<T> {
     }
 }
 
-/// 
+///
 /// - i * (omega_l-omega_l0) = - i * D_n/n! *(l-l0)^n
-/// 
+///
 /// this term should be - i * D_n/n!
-/// 
+///
 /// (n, - i * D_n / n!)
-/// 
+///
 impl<T: LleNum> LinearOp<T> for (DiffOrder, Complex<T>) {
     fn get_value(&self, _: Step, freq: Freq) -> Complex<T> {
         self.1 * pow_freq(freq, self.0)

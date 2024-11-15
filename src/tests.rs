@@ -164,3 +164,13 @@ fn check_freq_index2() {
     modify2(&mut data2);
     assert_eq!(data1, data2);
 }
+
+#[test]
+fn check_cached() {
+    const LEN: usize = 128;
+    let linear1 = (1, Complex64::from(1.));
+    let cached = linear1.clone().cached(LEN);
+    for i in (0..128).map(|x| freq_at(LEN, x)) {
+        assert_eq!(linear1.get_value(0, i), cached.get_value(0, i));
+    }
+}

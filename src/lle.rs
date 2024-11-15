@@ -54,29 +54,30 @@ where
 {
     fn evolve(&mut self) {
         let len = self.state().len();
+        let Self {
+            state,
+            linear,
+            nonlin,
+            constant,
+            step_dist,
+            fft,
+            cur_step,
+        } = self;
+        let state = state.as_mut();
         if !NonLin::SKIP {
-            if let Some(ref mut nonlin) = self.nonlin {
-                nonlin.apply(self.state.as_mut(), self.cur_step, self.step_dist);
+            if let Some(ref mut nonlin) = nonlin {
+                apply_nonlinear(state, nonlin, *step_dist, *cur_step);
             }
         }
-        if let Some(ref linear) = self.linear {
-            linear.apply(
-                self.state.as_mut(),
-                self.fft.get_or_insert_with(|| BufferedFft::new(len)),
-                self.cur_step,
-                self.step_dist,
-            );
-            let c = self.constant.unwrap_or_else(|| T::zero().into());
-            apply_constant_scale(
-                self.state.as_mut(),
-                c,
-                T::from_usize(len).unwrap(),
-                self.step_dist,
-            );
-        } else if let Some(c) = self.constant {
-            apply_constant(self.state.as_mut(), c, self.step_dist);
+        if let Some(ref linear) = linear {
+            let fft = fft.get_or_insert_with(|| BufferedFft::new(len));
+            apply_linear(state, &linear.by_ref(), fft, *step_dist, *cur_step);
+            let c = constant.unwrap_or_else(|| T::zero().into());
+            apply_constant_scale(state, c, T::from_usize(len).unwrap(), *step_dist);
+        } else if let Some(ref c) = constant {
+            apply_constant(state, *c, *step_dist);
         }
-        self.cur_step += 1;
+        *cur_step += 1;
     }
     fn state(&self) -> &[Complex<T>] {
         self.state.as_ref()

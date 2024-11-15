@@ -97,7 +97,7 @@ pub trait ParEvolver<T: LleNum> {
     }
 } */
 
-pub(crate) struct BufferedFft<T: LleNum> {
+pub struct BufferedFft<T: LleNum> {
     fft: Arc<dyn Fft<T>>,
     buf: Vec<Complex<T>>,
 }
@@ -180,6 +180,7 @@ pub fn apply_constant_scale<T>(
         .iter_mut()
         .for_each(|x| *x = *x / scale + constant * step_dist);
 }
+
 // input state_freq should not be fft shifted before
 pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
     state_freq: &mut [Complex<T>],
@@ -191,6 +192,19 @@ pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
     puffin::profile_function!();
 
     linear.apply_freq(state_freq, step_dist, cur_step);
+}
+
+// input state_freq should not be fft shifted before
+pub fn apply_linear<T: LleNum, L: LinearOp<T>>(
+    state: &mut [Complex<T>],
+    linear: &L,
+    fft: &mut (BufferedFft<T>, BufferedFft<T>),
+    step_dist: T,
+    cur_step: Step,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+    linear.apply(state, fft, step_dist, cur_step);
 }
 
 pub fn apply_nonlinear<T: LleNum, NL: NonLinearOp<T>>(

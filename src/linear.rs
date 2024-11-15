@@ -57,10 +57,7 @@ impl<T: LleNum> LinearOpCached<T> {
             "Only ops independent of step can be cached"
         );
         Self {
-            cache: (0..len)
-                .into_iter()
-                .map(|x| op.get_value(0, freq_at(len, x)))
-                .collect(),
+            cache: (0..len).map(|x| op.get_value(0, freq_at(len, x))).collect(),
         }
     }
 }
@@ -78,8 +75,8 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
         &self,
         state: &mut [Complex<T>],
         fft: &mut (BufferedFft<T>, BufferedFft<T>),
-        cur_step: Step,
         step_dist: T,
+        cur_step: Step,
     ) {
         if self.skip() {
             return;

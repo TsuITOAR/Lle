@@ -14,12 +14,12 @@ iterator_ilp = "2.1.2"
 rustfft = "^6.2"
 num-complex = { version = "^0.4", features = ["serde"] }
 typed-builder = "^0.20"
+serde = { version = "^1.0", features = ["derive"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 puffin = { version = "^0.19", git = "https://github.com/tedsteen/puffin.git", rev = "11771eb", features = [
     "packing",
 ], optional = true }
-serde = { version = "^1.0", features = ["derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 puffin = { version = "^0.19", git = "https://github.com/tedsteen/puffin.git", rev = "11771eb", features = [

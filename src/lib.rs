@@ -68,6 +68,7 @@ pub trait Evolver<T: LleNum> {
             self.evolve_with_monitor(&mut monitor)
         }
     }
+    fn cur_step(&self) -> Step;
 }
 /*
 pub trait ParEvolver<T: LleNum> {

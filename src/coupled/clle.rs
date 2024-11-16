@@ -194,4 +194,8 @@ where
     fn state_mut(&mut self) -> &mut [Complex<T>] {
         self.component1.state_mut()
     }
+
+    fn cur_step(&self) -> Step {
+        self.cur_step
+    }
 }

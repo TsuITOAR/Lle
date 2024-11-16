@@ -72,15 +72,15 @@ where
         }
         if let Some(ref linear) = linear {
             let fft = fft.get_or_insert_with(|| BufferedFft::new(len));
-            apply_linear(state, &linear.by_ref_linear_op(), fft, *step_dist, *cur_step);
+            apply_linear(
+                state,
+                &linear.by_ref_linear_op(),
+                fft,
+                *step_dist,
+                *cur_step,
+            );
             if let Some(ref c) = constant {
-                apply_constant_scale(
-                    state,
-                    c,
-                    T::from_usize(len).unwrap(),
-                    *cur_step,
-                    *step_dist,
-                );
+                apply_constant_scale(state, c, T::from_usize(len).unwrap(), *cur_step, *step_dist);
             } else {
                 apply_constant_scale(
                     state,
@@ -100,5 +100,8 @@ where
     }
     fn state_mut(&mut self) -> &mut [Complex<T>] {
         self.state.as_mut()
+    }
+    fn cur_step(&self) -> Step {
+        self.cur_step
     }
 }

@@ -3,28 +3,28 @@ use std::marker::PhantomData;
 
 pub trait NonLinearOp<T: LleNum>: Sized {
     fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]);
-    fn add<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpAdd<T, Self, A> {
+    fn add_nonlin_op<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpAdd<T, Self, A> {
         NonLinearOpAdd {
             op1: self,
             op2: lhs,
             ph: PhantomData,
         }
     }
-    fn sub<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpSub<T, Self, A> {
+    fn sub_nonlin_op<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpSub<T, Self, A> {
         NonLinearOpSub {
             op1: self,
             op2: lhs,
             ph: PhantomData,
         }
     }
-    fn mul<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpMul<T, Self, A> {
+    fn mul_nonlin_op<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpMul<T, Self, A> {
         NonLinearOpMul {
             op1: self,
             op2: lhs,
             ph: PhantomData,
         }
     }
-    fn div<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpDiv<T, Self, A> {
+    fn div_nonlin_op<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpDiv<T, Self, A> {
         NonLinearOpDiv {
             op1: self,
             op2: lhs,
@@ -73,11 +73,17 @@ impl<T: LleNum, R: NonLinearOp<T>> NonLinearOp<T> for NonLinearOpMut<'_, R> {
 
 impl<T: LleNum, O: NonLinearOp<T>> NonLinearOp<T> for Option<O> {
     fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {
-        match self {
-            Some(op) => op.get_value(step, state, dst),
-            None => dst.iter_mut().for_each(|x| *x = Complex::zero()),
+        if let Some(op) = self {
+            op.get_value(step, state, dst)
         }
     }
+    fn skip(&self) -> bool {
+        match self {
+            Some(x) => x.skip(),
+            None => true,
+        }
+    }
+    const SKIP: bool = O::SKIP;
 }
 
 pub struct NonLinearOpScaled<T: LleNum, O: NonLinearOp<T>> {
@@ -100,6 +106,7 @@ macro_rules! CompoundNonLinear {
             ph:PhantomData<T>
         }
         impl<T:LleNum,$g1:NonLinearOp<T>,$g2:NonLinearOp<T>> NonLinearOp<T> for $name<T,$g1,$g2> {
+            #[inline]
             fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]){
                 let mut buf1=vec![Complex::<T>::zero();dst.len()];
                 let mut buf2=vec![Complex::<T>::zero();dst.len()];

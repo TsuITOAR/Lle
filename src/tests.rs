@@ -12,7 +12,7 @@ fn linear_ops() {
     assert_eq!(linear2.get_value(1, 1), 2. * Complex64::from(1.).powu(3));
     assert_eq!(linear2.get_value(2, 3), 2. * Complex64::from(3.).powu(3));
 
-    let linear3 = linear1.clone().add(linear2.clone());
+    let linear3 = linear1.clone().add_linear_op(linear2.clone());
     assert_eq!(
         linear3.get_value(1, 3),
         linear1.get_value(1, 3) + linear2.get_value(1, 3)
@@ -58,7 +58,7 @@ fn zero_linear_op() {
     let mut s = LleSolver::<_, _, _>::builder()
         .state(start.clone())
         .step_dist(0.1)
-        .linear((1u32, Complex64::from(0.)).add((2, Complex64::from(0.))))
+        .linear((1u32, Complex64::from(0.)).add_linear_op((2, Complex64::from(0.))))
         .build();
 
     s.evolve_n_with_monitor(10, |x| {
@@ -73,7 +73,7 @@ fn evolve_some() {
     let mut s = LleSolver::<_, _, _>::builder()
         .state(start.clone())
         .step_dist(0.1)
-        .linear((1u32, Complex64::from(1.)).add((2, Complex64::from(1.))))
+        .linear((1u32, Complex64::from(1.)).add_linear_op((2, Complex64::from(1.))))
         .build();
 
     s.evolve();
@@ -87,7 +87,7 @@ fn evolve_some() {
     s.evolve();
     assert_ne!(start, s.state(),);
     let constant = Complex64::from(1.);
-    let mut s = LleSolver::<_, _>::builder()
+    let mut s = LleSolver::<_, _, NoneOp<_>, NoneOp<_>, _>::builder()
         .state(start.clone())
         .step_dist(0.1)
         .constant(constant)
@@ -169,7 +169,7 @@ fn check_freq_index2() {
 fn check_cached() {
     const LEN: usize = 128;
     let linear1 = (1, Complex64::from(1.));
-    let cached = linear1.clone().cached(LEN);
+    let cached = linear1.clone().cached_linear_op(LEN);
     for i in (0..128).map(|x| freq_at(LEN, x)) {
         assert_eq!(linear1.get_value(0, i), cached.get_value(0, i));
     }

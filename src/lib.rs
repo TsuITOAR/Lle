@@ -1,10 +1,13 @@
 #![feature(associated_type_defaults)]
 #![feature(type_alias_impl_trait)]
+#![feature(portable_simd)]
+mod const_term;
 mod coupled;
 mod linear;
 mod lle;
 mod nonlinear;
 
+pub use const_term::*;
 pub use coupled::*;
 pub use linear::*;
 pub use lle::*;
@@ -151,23 +154,27 @@ fn par_apply_linear<T: LleNum, L: LinearOp<T> + Sync>(
 }
  */
 
-pub fn apply_constant<T>(state: &mut [Complex<T>], constant: Complex<T>, step_dist: T)
-where
+pub fn apply_constant<T, C: ConstOp<T>>(
+    state: &mut [Complex<T>],
+    constant: &'_ C,
+    cur_step: Step,
+    step_dist: T,
+) where
     T: LleNum,
 {
-    if constant == T::zero().into() {
+    if constant.skip() {
         return;
     }
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
-
-    state.iter_mut().for_each(|x| *x += constant * step_dist);
+    constant.apply_linear_op(state, cur_step, step_dist);
 }
 
-pub fn apply_constant_scale<T>(
+pub fn apply_constant_scale<T, C: ConstOp<T>>(
     state: &mut [Complex<T>],
-    constant: Complex<T>,
+    constant: &'_ C,
     scale: T,
+    cur_step: Step,
     step_dist: T,
 ) where
     T: LleNum,
@@ -175,14 +182,41 @@ pub fn apply_constant_scale<T>(
     debug_assert!(!scale.is_zero());
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
+    state.iter_mut().for_each(|x| *x /= scale);
+    apply_constant(state, constant, cur_step, step_dist);
+}
 
-    state
-        .iter_mut()
-        .for_each(|x| *x = *x / scale + constant * step_dist);
+pub fn apply_linear<T: LleNum, L: LinearOp<T>>(
+    state: &mut [Complex<T>],
+    linear: &L,
+    fft: &mut (BufferedFft<T>, BufferedFft<T>),
+    step_dist: T,
+    cur_step: Step,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+    #[cfg(not(feature = "par"))]
+    apply_linear_sync(state, linear, fft, step_dist, cur_step);
+    #[cfg(feature = "par")]
+    apply_linear_par(state, linear, fft, step_dist, cur_step);
+}
+
+pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
+    state_freq: &mut [Complex<T>],
+    linear: &L,
+    step_dist: T,
+    cur_step: Step,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+    #[cfg(not(feature = "par"))]
+    apply_linear_freq_sync(state_freq, linear, step_dist, cur_step);
+    #[cfg(feature = "par")]
+    apply_linear_freq_par(state_freq, linear, step_dist, cur_step);
 }
 
 // input state_freq should not be fft shifted before
-pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
+pub fn apply_linear_freq_sync<T: LleNum, L: LinearOp<T>>(
     state_freq: &mut [Complex<T>],
     linear: &L,
     step_dist: T,
@@ -194,8 +228,22 @@ pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
     linear.apply_freq(state_freq, step_dist, cur_step);
 }
 
+#[cfg(feature = "par")]
 // input state_freq should not be fft shifted before
-pub fn apply_linear<T: LleNum, L: LinearOp<T>>(
+pub fn apply_linear_freq_par<T: LleNum, L: LinearOp<T> + Sync>(
+    state_freq: &mut [Complex<T>],
+    linear: &L,
+    step_dist: T,
+    cur_step: Step,
+) where
+    L: Sync,
+{
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+    linear.apply_freq_par(state_freq, step_dist, cur_step);
+}
+
+pub fn apply_linear_sync<T: LleNum, L: LinearOp<T>>(
     state: &mut [Complex<T>],
     linear: &L,
     fft: &mut (BufferedFft<T>, BufferedFft<T>),
@@ -205,6 +253,19 @@ pub fn apply_linear<T: LleNum, L: LinearOp<T>>(
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
     linear.apply(state, fft, step_dist, cur_step);
+}
+
+#[cfg(feature = "par")]
+pub fn apply_linear_par<T: LleNum, L: LinearOp<T> + Sync>(
+    state: &mut [Complex<T>],
+    linear: &L,
+    fft: &mut (BufferedFft<T>, BufferedFft<T>),
+    step_dist: T,
+    cur_step: Step,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+    linear.apply_par(state, fft, step_dist, cur_step);
 }
 
 pub fn apply_nonlinear<T: LleNum, NL: NonLinearOp<T>>(

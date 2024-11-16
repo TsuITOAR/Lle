@@ -9,32 +9,36 @@ pub struct CoupledLleSolver<
     Linear2 = NoneOp<T>,
     NonLin1 = NoneOp<T>,
     NonLin2 = NoneOp<T>,
+    Const1 = NoneOp<T>,
+    Const2 = NoneOp<T>,
     Couple = NoneOp<T>,
 > where
     T: LleNum,
 {
-    pub component1: LleSolver<T, S1, Linear1, NonLin1>,
-    pub component2: LleSolver<T, S2, Linear2, NonLin2>,
+    pub component1: LleSolver<T, S1, Linear1, NonLin1, Const1>,
+    pub component2: LleSolver<T, S2, Linear2, NonLin2, Const2>,
     pub couple: Couple,
     #[builder(default = 0, setter(skip))]
     cur_step: u32,
 }
 
-impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Couple>
-    CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Couple>
+impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
+    CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
 where
     T: LleNum,
     S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
     S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    Linear1: LinearOp<T>,
-    Linear2: LinearOp<T>,
+    Linear1: LinearOp<T> + Marker,
+    Linear2: LinearOp<T> + Marker,
     NonLin1: NonLinearOp<T>,
     NonLin2: NonLinearOp<T>,
+    Const1: ConstOp<T>,
+    Const2: ConstOp<T>,
     Couple: CoupleOp<T>,
 {
     pub fn new(
-        comp1: LleSolver<T, S1, Linear1, NonLin1>,
-        comp2: LleSolver<T, S2, Linear2, NonLin2>,
+        comp1: LleSolver<T, S1, Linear1, NonLin1, Const1>,
+        comp2: LleSolver<T, S2, Linear2, NonLin2, Const2>,
         couple: Couple,
     ) -> Self {
         Self {
@@ -46,16 +50,18 @@ where
     }
 }
 
-impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Couple> Evolver<T>
-    for CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Couple>
+impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple> Evolver<T>
+    for CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
 where
     T: LleNum,
     S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
     S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    Linear1: LinearOp<T>,
-    Linear2: LinearOp<T>,
+    Linear1: LinearOp<T> + Marker,
+    Linear2: LinearOp<T> + Marker,
     NonLin1: NonLinearOp<T>,
     NonLin2: NonLinearOp<T>,
+    Const1: ConstOp<T>,
+    Const2: ConstOp<T>,
     Couple: CoupleOp<T>,
 {
     fn evolve(&mut self) {
@@ -111,7 +117,7 @@ where
         fft1.0.fft_process(state1);
         apply_linear_freq(
             state1,
-            &linear1.by_ref().add(coup_linear1),
+            &linear1.by_ref_linear_op().add_linear_op(coup_linear1),
             *step_dist1,
             cur_step1,
         );
@@ -122,7 +128,7 @@ where
 
         apply_linear_freq(
             state2,
-            &linear2.by_ref().add(coup_linear2),
+            &linear2.by_ref_linear_op().add_linear_op(coup_linear2),
             *step_dist2,
             cur_step2,
         );
@@ -138,15 +144,17 @@ where
         //####################################################
         apply_constant_scale(
             state1,
-            constant1.unwrap_or_else(Complex::zero) + coup_constant1.unwrap_or_else(Complex::zero),
+            &constant1.by_ref_const_op().add_const_op(coup_constant1),
             T::from_usize(len1).unwrap(),
+            *cur_step,
             *step_dist1,
         );
 
         apply_constant_scale(
             state2,
-            constant2.unwrap_or_else(Complex::zero) + coup_constant2.unwrap_or_else(Complex::zero),
+            &constant2.by_ref_const_op().add_const_op(coup_constant2),
             T::from_usize(len2).unwrap(),
+            *cur_step,
             *step_dist2,
         );
 
@@ -154,18 +162,24 @@ where
             (None, None) => (),
             (None, Some(mut n)) => apply_nonlinear(state1, &mut n, *step_dist1, cur_step1),
             (Some(n), None) => apply_nonlinear(state1, n, *step_dist1, cur_step1),
-            (Some(n), Some(cn)) => {
-                apply_nonlinear(state1, &mut n.by_mut().add(cn), *step_dist1, cur_step1)
-            }
+            (Some(n), Some(cn)) => apply_nonlinear(
+                state1,
+                &mut n.by_mut().add_nonlin_op(cn),
+                *step_dist1,
+                cur_step1,
+            ),
         }
 
         match (nonlin2, coup_nonlin2) {
             (None, None) => (),
             (None, Some(mut n)) => apply_nonlinear(state2, &mut n, *step_dist2, cur_step2),
             (Some(n), None) => apply_nonlinear(state2, n, *step_dist2, cur_step2),
-            (Some(n), Some(cn)) => {
-                apply_nonlinear(state2, &mut n.by_mut().add(cn), *step_dist2, cur_step2)
-            }
+            (Some(n), Some(cn)) => apply_nonlinear(
+                state2,
+                &mut n.by_mut().add_nonlin_op(cn),
+                *step_dist2,
+                cur_step2,
+            ),
         }
 
         mix(couple, state1, state2, *step_dist1);

@@ -1,41 +1,87 @@
+#[cfg(feature = "par")]
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 use super::*;
 use std::marker::PhantomData;
 
+#[cfg(feature = "par")]
+mod sync_l {
+    pub trait Marker: Sync {}
+    impl<T: Sync> Marker for T {}
+}
+
+#[cfg(not(feature = "par"))]
+mod sync_l {
+    pub trait Marker {}
+    impl<T> Marker for T {}
+}
+
+pub use sync_l::Marker;
+
 /// get_value gives v, and the iterator is give by x*=exp(v*(i dpsi/dtheta)^n dt)=exp(v*freq^n dt)
-pub trait LinearOp<T: LleNum>: Sized {
+pub trait LinearOp<T: LleNum>: Sized + Marker {
     fn get_value(&self, step: Step, freq: Freq) -> Complex<T>;
-    fn add<A: LinearOp<T>>(self, lhs: A) -> LinearOpAdd<T, Self, A> {
+
+    #[cfg(feature = "par")]
+    fn par_get_value_array<const N: usize>(&self, step: Step, freq: &[Freq; N]) -> [Complex<T>; N]
+    where
+        Self: Sync,
+    {
+        let mut res = [Complex::zero(); N];
+        res.par_iter_mut().zip(freq.par_iter()).for_each(|(x, &f)| {
+            *x = self.get_value(step, f);
+        });
+
+        res
+    }
+    #[cfg(feature = "par")]
+    fn par_get_value_slice(
+        &self,
+        step: Step,
+        freq: impl IndexedParallelIterator<Item = Freq>,
+    ) -> impl IndexedParallelIterator<Item = Complex<T>>
+    where
+        Self: Sync,
+    {
+        freq.map(move |f| self.get_value(step, f))
+    }
+
+    fn add_linear_op<A: LinearOp<T>>(self, lhs: A) -> LinearOpAdd<T, Self, A> {
         LinearOpAdd {
             op1: self,
             op2: lhs,
             ph: PhantomData,
         }
     }
-    fn sub<A: LinearOp<T>>(self, lhs: A) -> LinearOpSub<T, Self, A> {
+    fn sub_linear_op<A: LinearOp<T>>(self, lhs: A) -> LinearOpSub<T, Self, A> {
         LinearOpSub {
             op1: self,
             op2: lhs,
             ph: PhantomData,
         }
     }
-    fn mul<A: LinearOp<T>>(self, lhs: A) -> LinearOpMul<T, Self, A> {
+    fn mul_linear_op<A: LinearOp<T>>(self, lhs: A) -> LinearOpMul<T, Self, A> {
         LinearOpMul {
             op1: self,
             op2: lhs,
             ph: PhantomData,
         }
     }
-    fn div<A: LinearOp<T>>(self, lhs: A) -> LinearOpDiv<T, Self, A> {
+    fn div_linear_op<A: LinearOp<T>>(self, lhs: A) -> LinearOpDiv<T, Self, A> {
         LinearOpDiv {
             op1: self,
             op2: lhs,
             ph: PhantomData,
         }
     }
-    fn by_ref(&'_ self) -> LinearOpRef<'_, Self> {
+    fn by_ref_linear_op(&'_ self) -> LinearOpRef<'_, Self> {
         LinearOpRef { op: self }
     }
-    fn cached(self, len: usize) -> LinearOpCached<T> {
+    fn cached_linear_op(self, len: usize) -> LinearOpCached<T>
+    where
+        Self: Sync,
+    {
         LinearOpCached::new(self, len)
     }
     const SKIP: bool = false;
@@ -50,19 +96,23 @@ pub struct LinearOpCached<T> {
 }
 
 impl<T: LleNum> LinearOpCached<T> {
-    pub fn new<L: LinearOp<T>>(op: L, len: usize) -> Self {
+    pub fn new<L: LinearOp<T> + Sync>(op: L, len: usize) -> Self {
         debug_assert_eq!(
             op.get_value(0, 0),
             op.get_value(1, 0),
             "Only ops independent of step can be cached"
         );
         Self {
-            cache: (0..len).map(|x| op.get_value(0, freq_at(len, x))).collect(),
+            cache: (0..len)
+                .into_par_iter()
+                .map(|x| op.get_value(0, freq_at(len, x)))
+                .collect(),
         }
     }
 }
 
 impl<T: LleNum> LinearOp<T> for LinearOpCached<T> {
+    #[inline]
     fn get_value(&self, _step: Step, freq: Freq) -> Complex<T> {
         let len = self.cache.len();
         self.cache[freq.rem_euclid(len as _) as usize]
@@ -96,12 +146,48 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
             *x *= (self.get_value(cur_step, f) * step_dist).exp();
         });
     }
+
+    #[cfg(feature = "par")]
+    fn apply_par(
+        &self,
+        state: &mut [Complex<T>],
+        fft: &mut (BufferedFft<T>, BufferedFft<T>),
+        step_dist: T,
+        cur_step: Step,
+    ) where
+        Self: Sync,
+    {
+        if self.skip() {
+            return;
+        }
+
+        fft.0.fft_process(state);
+        self.apply_freq_par(state, step_dist, cur_step);
+        fft.1.fft_process(state);
+    }
+
+    #[cfg(feature = "par")]
+    // input state_freq should not be fft shifted before
+    fn apply_freq_par(&self, state_freq: &mut [Complex<T>], step_dist: T, cur_step: Step)
+    where
+        Self: Sync,
+    {
+        if self.skip() {
+            return;
+        }
+        let freq = ((0)..(state_freq.len() as Freq)).into_par_iter();
+        let linear = self.par_get_value_slice(cur_step, freq);
+        state_freq.par_iter_mut().zip(linear).for_each(|(x, y)| {
+            *x *= (y * step_dist).exp();
+        });
+    }
 }
+
 use std::iter::{Chain, Enumerate, Map};
 use std::slice::IterMut;
 
 pub type ShiftFreqIter<'a, T> = Map<
-    Enumerate<Chain<std::slice::IterMut<'a, T>, IterMut<'a, T>>>,
+    Enumerate<Chain<IterMut<'a, T>, IterMut<'a, T>>>,
     impl FnMut((usize, &'a mut T)) -> (Freq, &'a mut T) + 'a,
 >;
 
@@ -123,19 +209,47 @@ pub struct LinearOpRef<'a, T> {
 }
 
 impl<T: LleNum, R: LinearOp<T>> LinearOp<T> for LinearOpRef<'_, R> {
+    #[inline]
     fn get_value(&self, step: Step, freq: Freq) -> Complex<T> {
         self.op.get_value(step, freq)
     }
+
+    #[cfg(feature = "par")]
+    fn par_get_value_array<const N: usize>(&self, step: Step, freq: &[Freq; N]) -> [Complex<T>; N]
+    where
+        Self: Sync,
+    {
+        self.op.par_get_value_array(step, freq)
+    }
+    #[cfg(feature = "par")]
+    fn par_get_value_slice(
+        &self,
+        step: Step,
+        freq: impl IndexedParallelIterator<Item = Freq>,
+    ) -> impl IndexedParallelIterator<Item = Complex<T>>
+    where
+        Self: Sync,
+    {
+        self.op.par_get_value_slice(step, freq)
+    }
+    fn skip(&self) -> bool {
+        self.op.skip()
+    }
+    const SKIP: bool = R::SKIP;
 }
 
 impl<T: LleNum, O: LinearOp<T>> LinearOp<T> for Option<O> {
+    #[inline]
     fn get_value(&self, step: Step, freq: Freq) -> Complex<T> {
         self.as_ref()
             .map_or_else(Complex::zero, |x| x.get_value(step, freq))
     }
 
     fn skip(&self) -> bool {
-        self.is_none()
+        match self {
+            Some(x) => x.skip(),
+            None => true,
+        }
     }
 }
 
@@ -144,6 +258,7 @@ fn pow_freq<T: LleNum>(freq: Freq, order: DiffOrder) -> Complex<T> {
 }
 
 impl<T: LleNum> LinearOp<T> for Complex<T> {
+    #[inline]
     fn get_value(&self, _: Step, _: Freq) -> Complex<T> {
         *self
     }
@@ -157,18 +272,21 @@ impl<T: LleNum> LinearOp<T> for Complex<T> {
 /// (n, - i * D_n / n!)
 ///
 impl<T: LleNum> LinearOp<T> for (DiffOrder, Complex<T>) {
+    #[inline]
     fn get_value(&self, _: Step, freq: Freq) -> Complex<T> {
         self.1 * pow_freq(freq, self.0)
     }
 }
 
-impl<T: LleNum, F: Fn(Step, Freq) -> Complex<T>> LinearOp<T> for F {
+impl<T: LleNum, F: Fn(Step, Freq) -> Complex<T> + Marker> LinearOp<T> for F {
+    #[inline]
     fn get_value(&self, step: Step, freq: Freq) -> Complex<T> {
         self(step, freq)
     }
 }
 
-impl<T: LleNum, F: Fn(Step) -> Complex<T>> LinearOp<T> for (DiffOrder, F) {
+impl<T: LleNum, F: Fn(Step) -> Complex<T> + Marker> LinearOp<T> for (DiffOrder, F) {
+    #[inline]
     fn get_value(&self, step: Step, freq: Freq) -> Complex<T> {
         self.1(step) * pow_freq(freq, self.0)
     }
@@ -205,7 +323,8 @@ macro_rules! CompoundLinear {
             ph:PhantomData<T>
         }
         impl<T:LleNum,$g1:LinearOp<T>,$g2:LinearOp<T>> LinearOp<T> for $name<T,$g1,$g2> {
-            fn get_value(&self,step:Step,freq:Freq)->Complex<T>{
+            #[inline]
+            fn get_value(&self, step: Step, freq: Freq)->Complex<T>{
                 self.op1.get_value(step,freq) $op self.op2.get_value(step,freq)
             }
             fn skip(&self)->bool{
@@ -220,15 +339,3 @@ CompoundLinear!( LinearOpAdd<P1, P2>,+);
 CompoundLinear!( LinearOpSub<P1, P2>,-);
 CompoundLinear!( LinearOpMul<P1, P2>,*);
 CompoundLinear!( LinearOpDiv<P1, P2>,/);
-
-pub trait IntoLinearOps<T: LleNum> {
-    type Output: LinearOp<T>;
-    fn into_linear_ops(self) -> Option<Self::Output>;
-}
-
-impl<T: LleNum, U: LinearOp<T>> IntoLinearOps<T> for U {
-    type Output = Self;
-    fn into_linear_ops(self) -> Option<Self::Output> {
-        Some(self)
-    }
-}

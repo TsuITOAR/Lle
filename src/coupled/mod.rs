@@ -8,6 +8,7 @@ use rustfft::num_traits::zero;
 pub trait CoupleOp<T: LleNum> {
     type Linear: LinearOp<T> = NoneOp<T>;
     type NonLinear: NonLinearOp<T> = NoneOp<T>;
+    type ConstOp: ConstOp<T> = NoneOp<T>;
 
     /// input is the freq domain state, start with 0 freq, scaled
     fn linear(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::Linear> {
@@ -18,7 +19,7 @@ pub trait CoupleOp<T: LleNum> {
         None
     }
 
-    fn constant(&self, _state: &[Complex<T>], _step: Step) -> Option<Complex<T>> {
+    fn constant(&self, _state: &[Complex<T>], _step: Step) -> Option<Self::ConstOp> {
         None
     }
 
@@ -68,10 +69,10 @@ pub trait CoupleOp<T: LleNum> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ExtractedCoupleOps<T, L, N> {
+pub(crate) struct ExtractedCoupleOps<L, N, C> {
     pub linear: Option<L>,
     pub nonlinear: Option<N>,
-    pub constant: Option<Complex<T>>,
+    pub constant: Option<C>,
 }
 
 pub(crate) trait CoupleOpExt<T: LleNum>: CoupleOp<T> {
@@ -79,7 +80,7 @@ pub(crate) trait CoupleOpExt<T: LleNum>: CoupleOp<T> {
         &self,
         state: &[Complex<T>],
         step: Step,
-    ) -> ExtractedCoupleOps<T, Self::Linear, Self::NonLinear> {
+    ) -> ExtractedCoupleOps<Self::Linear, Self::NonLinear, Self::ConstOp> {
         #[cfg(feature = "puffin")]
         puffin::profile_function!();
         ExtractedCoupleOps {
@@ -101,20 +102,21 @@ pub struct CoupleOpAdd<C1, C2> {
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpAdd<C1, C2> {
     type Linear = LinearOpAdd<T, C1::Linear, Option<C2::Linear>>;
     type NonLinear = NonLinearOpAdd<T, C1::NonLinear, Option<C2::NonLinear>>;
+    type ConstOp = ConstOpAdd<T, C1::ConstOp, Option<C2::ConstOp>>;
     fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
         self.lhs
             .linear(state, step)
-            .map(|lhs| lhs.add(self.rhs.linear(state, step)))
+            .map(|lhs| lhs.add_linear_op(self.rhs.linear(state, step)))
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.lhs
             .nonlinear(state, step)
-            .map(|lhs| lhs.add(self.rhs.nonlinear(state, step)))
+            .map(|lhs| lhs.add_nonlin_op(self.rhs.nonlinear(state, step)))
     }
-    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
+    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Self::ConstOp> {
         self.lhs
             .constant(state, step)
-            .map(|x| x + self.rhs.constant(state, step).unwrap_or_else(zero))
+            .map(|lhs| lhs.add_const_op(self.rhs.constant(state, step)))
     }
     fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
         self.lhs.mix(s1, s2, step_dist);
@@ -135,13 +137,14 @@ pub struct CoupleOpWithLinear<C1, C2> {
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithLinear<C1, C2> {
     type Linear = C2::Linear;
     type NonLinear = C1::NonLinear;
+    type ConstOp = C1::ConstOp;
     fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
         self.linear.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.couple.nonlinear(state, step)
     }
-    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
+    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Self::ConstOp> {
         self.couple.constant(state, step)
     }
     fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
@@ -161,13 +164,14 @@ pub struct CoupleOpWithNonLinear<C1, C2> {
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithNonLinear<C1, C2> {
     type Linear = C1::Linear;
     type NonLinear = C2::NonLinear;
+    type ConstOp = C1::ConstOp;
     fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
         self.couple.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.nonlinear.nonlinear(state, step)
     }
-    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
+    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Self::ConstOp> {
         self.couple.constant(state, step)
     }
     fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
@@ -187,13 +191,14 @@ pub struct CoupleOpWithConstant<C1, C2> {
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithConstant<C1, C2> {
     type Linear = C1::Linear;
     type NonLinear = C1::NonLinear;
+    type ConstOp = C2::ConstOp;
     fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
         self.couple.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.couple.nonlinear(state, step)
     }
-    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
+    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Self::ConstOp> {
         self.constant.constant(state, step)
     }
     fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {
@@ -213,13 +218,14 @@ pub struct CoupleOpWithMix<C1, C2> {
 impl<T: LleNum, C1: CoupleOp<T>, C2: CoupleOp<T>> CoupleOp<T> for CoupleOpWithMix<C1, C2> {
     type Linear = C1::Linear;
     type NonLinear = C1::NonLinear;
+    type ConstOp = C1::ConstOp;
     fn linear(&self, state: &[Complex<T>], step: Step) -> Option<Self::Linear> {
         self.couple.linear(state, step)
     }
     fn nonlinear(&self, state: &[Complex<T>], step: Step) -> Option<Self::NonLinear> {
         self.couple.nonlinear(state, step)
     }
-    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Complex<T>> {
+    fn constant(&self, state: &[Complex<T>], step: Step) -> Option<Self::ConstOp> {
         self.couple.constant(state, step)
     }
     fn mix(&self, s1: &mut [Complex<T>], s2: &mut [Complex<T>], step_dist: T) {

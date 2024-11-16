@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(typed_builder::TypedBuilder)]
-pub struct LleSolver<T, S, Linear = NoneOp<T>, Nonlin = NoneOp<T>>
+pub struct LleSolver<T, S, Linear = NoneOp<T>, Nonlin = NoneOp<T>, Const = NoneOp<T>>
 where
     T: LleNum,
 {
@@ -11,7 +11,7 @@ where
     #[builder(default, setter(strip_option))]
     pub nonlin: Option<Nonlin>,
     #[builder(default, setter(strip_option))]
-    pub constant: Option<Complex<T>>,
+    pub constant: Option<Const>,
     pub step_dist: T,
     #[builder(default, setter(skip))]
     pub(crate) fft: Option<(BufferedFft<T>, BufferedFft<T>)>,
@@ -33,24 +33,25 @@ impl<T: LleNum, S: Clone, Linear: Clone, NonLin: Clone> Clone for LleSolver<T, S
     }
 }
 
-impl<T: LleNum, S, Linear, NonLin> LleSolver<T, S, Linear, NonLin> {
+impl<T: LleNum, S, Linear, NonLin, Const> LleSolver<T, S, Linear, NonLin, Const> {
     pub fn linear_mut(&mut self) -> &mut Option<Linear> {
         &mut self.linear
     }
     pub fn nonlin_mut(&mut self) -> &mut Option<NonLin> {
         &mut self.nonlin
     }
-    pub fn constant_mut(&mut self) -> &mut Option<Complex<T>> {
+    pub fn constant_mut(&mut self) -> &mut Option<Const> {
         &mut self.constant
     }
 }
 
-impl<T, S, Linear, NonLin> Evolver<T> for LleSolver<T, S, Linear, NonLin>
+impl<T, S, Linear, NonLin, Const> Evolver<T> for LleSolver<T, S, Linear, NonLin, Const>
 where
     T: LleNum,
     S: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    Linear: LinearOp<T>,
+    Linear: LinearOp<T> + Marker,
     NonLin: NonLinearOp<T>,
+    Const: ConstOp<T>,
 {
     fn evolve(&mut self) {
         let len = self.state().len();
@@ -71,11 +72,26 @@ where
         }
         if let Some(ref linear) = linear {
             let fft = fft.get_or_insert_with(|| BufferedFft::new(len));
-            apply_linear(state, &linear.by_ref(), fft, *step_dist, *cur_step);
-            let c = constant.unwrap_or_else(|| T::zero().into());
-            apply_constant_scale(state, c, T::from_usize(len).unwrap(), *step_dist);
+            apply_linear(state, &linear.by_ref_linear_op(), fft, *step_dist, *cur_step);
+            if let Some(ref c) = constant {
+                apply_constant_scale(
+                    state,
+                    c,
+                    T::from_usize(len).unwrap(),
+                    *cur_step,
+                    *step_dist,
+                );
+            } else {
+                apply_constant_scale(
+                    state,
+                    &Complex::<T>::zero(),
+                    T::from_usize(len).unwrap(),
+                    *cur_step,
+                    *step_dist,
+                );
+            }
         } else if let Some(ref c) = constant {
-            apply_constant(state, *c, *step_dist);
+            apply_constant(state, c, *cur_step, *step_dist);
         }
         *cur_step += 1;
     }

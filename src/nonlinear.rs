@@ -54,7 +54,7 @@ pub(crate) trait NonLinearOpExt<T: LleNum>: NonLinearOp<T> {
         self.get_value(cur_step, state, &mut buf);
         state
             .iter_mut()
-            .zip(buf.iter())
+            .zip(buf)
             .for_each(|x| *x.0 *= (x.1 * step_dist).exp())
     }
 }
@@ -108,6 +108,9 @@ macro_rules! CompoundNonLinear {
         impl<T:LleNum,$g1:NonLinearOp<T>,$g2:NonLinearOp<T>> NonLinearOp<T> for $name<T,$g1,$g2> {
             #[inline]
             fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]){
+                if self.op1.skip()||self.op2.skip(){
+                    log::info!("NonLinearOp combination includes skippable operation");
+                }
                 let mut buf1=vec![Complex::<T>::zero();dst.len()];
                 let mut buf2=vec![Complex::<T>::zero();dst.len()];
                 self.op1.get_value(step,state,&mut buf1);
@@ -142,78 +145,10 @@ impl<T: LleNum, F: FnMut(Complex<T>) -> Complex<T>> NonLinearOp<T> for F {
             .for_each(|(d, s)| *d = (self)(*s));
     }
 }
-/*
-#[derive(Clone, Debug)]
-pub struct NonLinOp<T, Op> {
-    buff: Vec<Complex<T>>,
-    operator: Op,
-}
-
-impl<T: LleNum, Op: Fn(Complex<T>) -> Complex<T>> NonLinOp<T, Op> {
-    pub(crate) fn new(operator: Op) -> Self {
-        Self {
-            buff: Vec::new(),
-            operator,
-        }
-    }
-    pub(crate) fn refresh(&mut self, state: &[Complex<T>]) {
-        self.buff.clear();
-        self.buff.extend(state.iter().map(|x| (self.operator)(*x)))
-    }
-    pub(crate) fn par_refresh(&mut self, state: &[Complex<T>])
-    where
-        Op: Sync + Send,
-    {
-        state
-            .par_iter()
-            .map(|x| (self.operator)(*x))
-            .collect_into_vec(&mut self.buff)
-    }
-    pub(crate) fn buff(&self) -> &[Complex<T>] {
-        &self.buff
-    }
-}
- */
-/* pub fn none_op<T: LleNum>() -> NonlinOp<T, fn(Complex<T>) -> Complex<T>> {
-    fn do_nothing<T>(t: T) -> T {
-        t
-    }
-    NonlinOp {
-        buff: Vec::new(),
-        operator: do_nothing::<Complex<T>>,
-    }
-}
- */
 
 impl<T: Zero + LleNum> NonLinearOp<T> for NoneOp<T> {
     fn get_value(&mut self, _: Step, _: &[Complex<T>], _: &mut [Complex<T>]) {
-        unreachable!("NonLinearOp::get_value called on NoneOp")
+        log::info!("NonLinearOp::get_value called on NoneOp")
     }
     const SKIP: bool = true;
 }
-/*
-pub trait IntoNonlinOps<T: LleNum>: Sized {
-    type Op: Fn(Complex<T>) -> Complex<T>;
-    fn into_nonlin_ops(self) -> Option<NonLinOp<T, Self::Op>>;
-}
-
-impl<T: LleNum, F: Fn(Complex<T>) -> Complex<T>> IntoNonlinOps<T> for F {
-    type Op = Self;
-    fn into_nonlin_ops(self) -> Option<NonLinOp<T, Self::Op>> {
-        Some(NonLinOp::new(self))
-    }
-}
-
-impl<T: LleNum> IntoNonlinOps<T> for Option<Box<dyn Fn(Complex<T>) -> Complex<T>>> {
-    type Op = Box<dyn Fn(Complex<T>) -> Complex<T>>;
-    fn into_nonlin_ops(self) -> Option<NonLinOp<T, Self::Op>> {
-        self.map(|p| NonLinOp::new(p))
-    }
-}
- */
-/*
- [LinearOp<T,F>;LEN] can't solve when a array composed of two LinearOps with different F, need to use tuple instead
- maybe define a trait for the behavior of input a time value (the step), and output the operator of linear
-
-TODO: Linear trait finished, Nonlinear operator may depend on current step and pos too, also need a trait instead of a single struct
-*/

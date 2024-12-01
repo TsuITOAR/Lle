@@ -38,7 +38,8 @@ const STEP_DIST: f64 = 1e-4;
 use lle::{Evolver, LinearOp, Step};
 fn bench_linear(size: usize) {
     const STEP: Step = 1000;
-    let linear = (0, -(Complex64::i() * ALPHA_START + 1.)).add_linear_op((2, -Complex64::i() * LINEAR / 2.));
+    let linear =
+        (0, -(Complex64::i() * ALPHA_START + 1.)).add_linear_op((2, -Complex64::i() * LINEAR / 2.));
     let mut solver: LleSolver<f64, _, _> = LleSolver::builder()
         .state(get_init(size))
         .step_dist(STEP_DIST)

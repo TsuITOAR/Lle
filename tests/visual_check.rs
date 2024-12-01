@@ -33,7 +33,8 @@ fn get_file_path<F: AsRef<str>>(f: F) -> PathBuf {
 fn static_linear() {
     const STEP_NUM: u32 = 25_000;
     let nonlin = |x: Complex64| Complex::i() * x.norm_sqr();
-    let linear = (0, -(Complex64::i() * ALPHA_START + 1.)).add_linear_op((2, -Complex64::i() * LINEAR / 2.));
+    let linear =
+        (0, -(Complex64::i() * ALPHA_START + 1.)).add_linear_op((2, -Complex64::i() * LINEAR / 2.));
 
     let mut s = LleSolver::builder()
         .state(get_ini())

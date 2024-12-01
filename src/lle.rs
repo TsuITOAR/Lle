@@ -65,11 +65,11 @@ where
             cur_step,
         } = self;
         let state = state.as_mut();
-        if !NonLin::SKIP {
-            if let Some(ref mut nonlin) = nonlin {
-                apply_nonlinear(state, nonlin, *step_dist, *cur_step);
-            }
+
+        if let Some(ref mut nonlin) = nonlin {
+            apply_nonlinear(state, nonlin, *step_dist, *cur_step);
         }
+
         if let Some(ref linear) = linear {
             let fft = fft.get_or_insert_with(|| BufferedFft::new(len));
             apply_linear(

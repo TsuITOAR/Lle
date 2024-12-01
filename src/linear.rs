@@ -84,9 +84,8 @@ pub trait LinearOp<T: LleNum>: Sized + Marker {
     {
         LinearOpCached::new(self, len)
     }
-    const SKIP: bool = false;
     fn skip(&self) -> bool {
-        Self::SKIP
+        false
     }
 }
 
@@ -235,7 +234,6 @@ impl<T: LleNum, R: LinearOp<T>> LinearOp<T> for LinearOpRef<'_, R> {
     fn skip(&self) -> bool {
         self.op.skip()
     }
-    const SKIP: bool = R::SKIP;
 }
 
 impl<T: LleNum, O: LinearOp<T>> LinearOp<T> for Option<O> {
@@ -312,7 +310,9 @@ impl<T: Zero + LleNum> LinearOp<T> for NoneOp<T> {
         log::info!("LinearOp::get_value called on NoneOp");
         Complex::zero()
     }
-    const SKIP: bool = true;
+    fn skip(&self) -> bool {
+        true
+    }
 }
 
 macro_rules! CompoundLinear {
@@ -329,9 +329,8 @@ macro_rules! CompoundLinear {
                 self.op1.get_value(step,freq) $op self.op2.get_value(step,freq)
             }
             fn skip(&self)->bool{
-                self.op1.skip()||self.op2.skip()
+                self.op1.skip() && self.op2.skip()
             }
-            const SKIP: bool = $g1::SKIP || $g2::SKIP;
         }
     };
 }

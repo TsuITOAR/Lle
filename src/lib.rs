@@ -293,6 +293,18 @@ pub fn mix<T: LleNum, C: CoupleOp<T>>(
     c.mix(state1, state2, step_dist);
 }
 
+pub fn mix_freq<T: LleNum, C: CoupleOp<T>>(
+    c: &mut C,
+    state1: &mut [Complex<T>],
+    state2: &mut [Complex<T>],
+    step_dist: T,
+) {
+    #[cfg(feature = "puffin")]
+    puffin::profile_function!();
+
+    c.mix_freq(state1, state2, step_dist);
+}
+
 pub fn freq_at(len: usize, i: usize) -> Freq {
     let split_pos = (len + 1) / 2;
     ((i + len - split_pos) % len) as Freq - (len - split_pos) as Freq

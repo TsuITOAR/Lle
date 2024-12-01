@@ -37,9 +37,8 @@ pub trait NonLinearOp<T: LleNum>: Sized {
     fn by_mut(&'_ mut self) -> NonLinearOpMut<'_, Self> {
         NonLinearOpMut { op: self }
     }
-    const SKIP: bool = false;
     fn skip(&self) -> bool {
-        Self::SKIP
+        false
     }
 }
 
@@ -83,7 +82,6 @@ impl<T: LleNum, O: NonLinearOp<T>> NonLinearOp<T> for Option<O> {
             None => true,
         }
     }
-    const SKIP: bool = O::SKIP;
 }
 
 pub struct NonLinearOpScaled<T: LleNum, O: NonLinearOp<T>> {
@@ -108,7 +106,7 @@ macro_rules! CompoundNonLinear {
         impl<T:LleNum,$g1:NonLinearOp<T>,$g2:NonLinearOp<T>> NonLinearOp<T> for $name<T,$g1,$g2> {
             #[inline]
             fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]){
-                if self.op1.skip()||self.op2.skip(){
+                if self.op1.skip() || self.op2.skip(){
                     log::info!("NonLinearOp combination includes skippable operation");
                 }
                 let mut buf1=vec![Complex::<T>::zero();dst.len()];
@@ -117,7 +115,9 @@ macro_rules! CompoundNonLinear {
                 self.op2.get_value(step,state,&mut buf2);
                 dst.iter_mut().zip(buf1.iter().zip(buf2.iter())).for_each(|(d,(b1,b2))|*d=b1 $op b2);
             }
-            const SKIP: bool = $g1::SKIP || $g2::SKIP;
+            fn skip(&self) -> bool{
+                self.op1.skip() || self.op2.skip()
+            }
         }
     };
 }
@@ -150,5 +150,7 @@ impl<T: Zero + LleNum> NonLinearOp<T> for NoneOp<T> {
     fn get_value(&mut self, _: Step, _: &[Complex<T>], _: &mut [Complex<T>]) {
         log::info!("NonLinearOp::get_value called on NoneOp")
     }
-    const SKIP: bool = true;
+    fn skip(&self) -> bool {
+        true
+    }
 }

@@ -135,7 +135,7 @@ where
 
         //####################################################
 
-        couple.mix_freq(state1, state2, *step_dist1);
+        mix_freq(couple, state1, state2, *step_dist1);
 
         //####################################################
         fft1.1.fft_process(state1);

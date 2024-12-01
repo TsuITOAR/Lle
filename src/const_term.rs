@@ -4,10 +4,6 @@ use rustfft::num_traits::zero;
 use std::marker::PhantomData;
 
 pub trait ConstOp<T: LleNum> {
-    const SKIP: bool = false;
-    fn skip(&self) -> bool {
-        Self::SKIP
-    }
     fn get_value(&self, cur_step: Step, pos: usize) -> Complex<T>;
 
     fn add_const_op<R: ConstOp<T>>(self, rhs: R) -> ConstOpAdd<T, Self, R>
@@ -83,6 +79,9 @@ pub trait ConstOp<T: LleNum> {
             *x += self.get_value(cur_step, i) * step_dist;
         });
     }
+    fn skip(&self) -> bool {
+        false
+    }
 }
 
 macro_rules! CompoundConst {
@@ -99,9 +98,8 @@ macro_rules! CompoundConst {
                 self.op1.get_value(step,pos) $op self.op2.get_value(step,pos)
             }
             fn skip(&self)->bool{
-                self.op1.skip()||self.op2.skip()
+                self.op1.skip() && self.op2.skip()
             }
-            const SKIP: bool = $g1::SKIP || $g2::SKIP;
         }
     };
 }
@@ -157,7 +155,6 @@ impl<'a, T: LleNum, L: ConstOp<T>> ConstOp<T> for ConstOpRef<'a, T, L> {
     fn skip(&self) -> bool {
         self.op.skip()
     }
-    const SKIP: bool = L::SKIP;
 }
 
 impl<T: LleNum> ConstOp<T> for Complex<T> {
@@ -287,7 +284,6 @@ impl<T: LleNum> ConstOp<T> for NoneOp<T> {
     fn skip(&self) -> bool {
         true
     }
-    const SKIP: bool = true;
 }
 
 impl<T: LleNum, L: ConstOp<T>> ConstOp<T> for Option<L> {

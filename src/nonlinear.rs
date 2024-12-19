@@ -1,7 +1,7 @@
 use super::*;
 use std::marker::PhantomData;
 
-pub trait NonLinearOp<T: LleNum>: Sized {
+pub trait NonLinearOp<T: LleNum>: Sized + Marker {
     fn get_value(&mut self, step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]);
     fn add_nonlin_op<A: NonLinearOp<T>>(self, lhs: A) -> NonLinearOpAdd<T, Self, A> {
         NonLinearOpAdd {

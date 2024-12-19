@@ -78,12 +78,6 @@ pub trait LinearOp<T: LleNum>: Sized + Marker {
     fn by_ref_linear_op(&'_ self) -> LinearOpRef<'_, Self> {
         LinearOpRef { op: self }
     }
-    fn cached_linear_op(self, len: usize) -> LinearOpCached<T>
-    where
-        Self: Sync,
-    {
-        LinearOpCached::new(self, len)
-    }
     fn skip(&self) -> bool {
         false
     }
@@ -203,6 +197,7 @@ pub fn shift_freq<T>(freq: &mut [T]) -> ShiftFreqIter<'_, T> {
 
 impl<T: LleNum, L: LinearOp<T>> LinearOpExt<T> for L {}
 
+#[derive(Debug, Clone)]
 pub struct LinearOpRef<'a, T> {
     op: &'a T,
 }
@@ -332,6 +327,7 @@ macro_rules! CompoundLinear {
                 self.op1.skip() && self.op2.skip()
             }
         }
+        impl<T:LleNum,$g1:StaticLinearOp<T>,$g2:StaticLinearOp<T>> StaticLinearOp<T> for $name<T,$g1,$g2> {}
     };
 }
 
@@ -339,3 +335,30 @@ CompoundLinear!( LinearOpAdd<P1, P2>,+);
 CompoundLinear!( LinearOpSub<P1, P2>,-);
 CompoundLinear!( LinearOpMul<P1, P2>,*);
 CompoundLinear!( LinearOpDiv<P1, P2>,/);
+
+/// Impl for all but SelfPump
+pub trait StaticLinearOp<T: LleNum>: LinearOp<T> {
+    fn cached_linear_op(self, len: usize) -> LinearOpCached<T>
+    where
+        Self: Sized + Sync,
+    {
+        LinearOpCached::new(self, len)
+    }
+}
+
+impl<T: LleNum> StaticLinearOp<T> for LinearOpCached<T> {
+    fn cached_linear_op(self, _len: usize) -> LinearOpCached<T>
+    where
+        Self: Sized + Sync,
+    {
+        unreachable!("LinearOpCached should not be used with cached_linear_op")
+    }
+}
+
+impl<T: LleNum, L: LinearOp<T>> StaticLinearOp<T> for LinearOpRef<'_, L> {}
+impl<T: LleNum> StaticLinearOp<T> for NoneOp<T> {}
+impl<T: LleNum, L: StaticLinearOp<T>> StaticLinearOp<T> for Option<L> {}
+impl<T: LleNum> StaticLinearOp<T> for (DiffOrder, Complex<T>) {}
+impl<T: LleNum, F: Fn(Step, Freq) -> Complex<T> + Marker> StaticLinearOp<T> for F {}
+impl<T: LleNum, F: Fn(Step) -> Complex<T> + Marker> StaticLinearOp<T> for (DiffOrder, F) {}
+impl<T: LleNum> StaticLinearOp<T> for Complex<T> {}

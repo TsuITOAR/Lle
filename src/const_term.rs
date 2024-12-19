@@ -148,7 +148,7 @@ pub struct ConstOpRef<'a, T: LleNum, L: ConstOp<T> + ?Sized> {
     ph: PhantomData<T>,
 }
 
-impl<'a, T: LleNum, L: ConstOp<T>> ConstOp<T> for ConstOpRef<'a, T, L> {
+impl<T: LleNum, L: ConstOp<T>> ConstOp<T> for ConstOpRef<'_, T, L> {
     fn get_value(&self, cur_step: Step, pos: usize) -> Complex<T> {
         self.op.get_value(cur_step, pos)
     }
@@ -209,7 +209,7 @@ impl<T: LleNum> ConstOp<T> for Vec<Complex<T>> {
     }
 }
 
-impl<'a, T: LleNum> ConstOp<T> for &'a Vec<Complex<T>> {
+impl<T: LleNum> ConstOp<T> for &Vec<Complex<T>> {
     fn get_value(&self, _step: Step, pos: usize) -> Complex<T> {
         self[pos]
     }
@@ -226,7 +226,7 @@ impl<'a, T: LleNum> ConstOp<T> for &'a Vec<Complex<T>> {
     }
 }
 
-impl<'a, T: LleNum> ConstOp<T> for &'a [Complex<T>] {
+impl<T: LleNum> ConstOp<T> for &[Complex<T>] {
     fn get_value(&self, _step: Step, pos: usize) -> Complex<T> {
         self[pos]
     }

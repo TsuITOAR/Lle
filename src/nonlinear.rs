@@ -97,7 +97,7 @@ impl<T: LleNum, O: NonLinearOp<T>> NonLinearOp<T> for NonLinearOpScaled<T, O> {
 
 macro_rules! CompoundNonLinear {
     ($name:ident<$g1:ident, $g2:ident>,$op:tt) => {
-        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
         pub struct $name<T:LleNum,$g1:NonLinearOp<T>,$g2:NonLinearOp<T>> {
             op1:$g1,
             op2:$g2,
@@ -128,7 +128,7 @@ CompoundNonLinear!( NonLinearOpMul<P1, P2>,*);
 CompoundNonLinear!( NonLinearOpDiv<P1, P2>,/);
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
-pub struct SPhaMod {}
+pub struct SPhaMod;
 
 impl<T: LleNum> NonLinearOp<T> for SPhaMod {
     fn get_value(&mut self, _: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {

@@ -317,7 +317,7 @@ impl<T: Zero + LleNum> LinearOp<T> for NoneOp<T> {
 
 macro_rules! CompoundLinear {
     ($name:ident<$g1:ident, $g2:ident>,$op:tt) => {
-        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
         pub struct $name<T:LleNum,$g1:LinearOp<T>,$g2:LinearOp<T>> {
             op1:$g1,
             op2:$g2,

@@ -82,8 +82,8 @@ macro_rules! CompoundConst {
     ($name:ident<$g1:ident, $g2:ident>,$op:tt,$op1:tt) => {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         pub struct $name<T:LleNum,$g1:ConstOp<T>,$g2:ConstOp<T>> {
-            op1:$g1,
-            op2:$g2,
+            pub op1:$g1,
+            pub op2:$g2,
             ph:PhantomData<T>
         }
         impl<T:LleNum,$g1:ConstOp<T>,$g2:ConstOp<T>> ConstOp<T> for $name<T,$g1,$g2> {

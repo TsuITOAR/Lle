@@ -79,7 +79,7 @@ pub trait ConstOp<T: LleNum>: Sized + Marker {
 }
 
 macro_rules! CompoundConst {
-    ($name:ident<$g1:ident, $g2:ident>,$op:tt) => {
+    ($name:ident<$g1:ident, $g2:ident>,$op:tt,$op1:tt) => {
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         pub struct $name<T:LleNum,$g1:ConstOp<T>,$g2:ConstOp<T>> {
             op1:$g1,
@@ -91,6 +91,25 @@ macro_rules! CompoundConst {
             fn get_value(&self, step: Step, pos: usize,  state: &[Complex<T>])->Complex<T>{
                 self.op1.get_value(step,pos,state) $op self.op2.get_value(step,pos,state)
             }
+
+
+            fn get_value_array(&self, cur_step: Step, state: &[Complex<T>]) -> Vec<Complex<T>> {
+                let mut array1=self.op1.get_value_array(cur_step,state);
+                let array2=self.op2.get_value_array(cur_step,state);
+                array1.iter_mut().zip(array2.iter()).for_each(|(x,y)|{
+                    *x $op1 *y;
+                });
+                array1
+            }
+
+            fn fill_value_array(&self, cur_step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {
+                self.op1.fill_value_array(cur_step,state,dst);
+                let array2=self.op2.get_value_array(cur_step,state);
+                dst.iter_mut().zip(array2.iter()).for_each(|(x,y)|{
+                    *x $op1 *y;
+                });
+            }
+
             fn skip(&self)->bool{
                 self.op1.skip() && self.op2.skip()
             }
@@ -100,10 +119,10 @@ macro_rules! CompoundConst {
     };
 }
 
-CompoundConst!( ConstOpAdd<P1, P2>,+);
-CompoundConst!( ConstOpSub<P1, P2>,-);
-CompoundConst!( ConstOpMul<P1, P2>,*);
-CompoundConst!( ConstOpDiv<P1, P2>,/);
+CompoundConst!( ConstOpAdd<P1, P2>,+,+=);
+CompoundConst!( ConstOpSub<P1, P2>,-,-=);
+CompoundConst!( ConstOpMul<P1, P2>,*,*=);
+CompoundConst!( ConstOpDiv<P1, P2>,/,/=);
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ConstOpCached<T: LleNum> {

@@ -167,6 +167,15 @@ impl<T: LleNum, L: ConstOp<T>> ConstOp<T> for ConstOpRef<'_, L> {
     fn get_value(&self, cur_step: Step, pos: usize, state: &[Complex<T>]) -> Complex<T> {
         self.op.get_value(cur_step, pos, state)
     }
+    fn fill_value_array(&self, cur_step: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {
+        self.op.fill_value_array(cur_step, state, dst);
+    }
+    fn get_value_array(&self, cur_step: Step, state: &[Complex<T>]) -> Vec<Complex<T>> {
+        self.op.get_value_array(cur_step, state)
+    }
+    fn apply_const_op(&self, state: &mut [Complex<T>], cur_step: Step, step_dist: T) {
+        self.op.apply_const_op(state, cur_step, step_dist);
+    }
     fn skip(&self) -> bool {
         self.op.skip()
     }

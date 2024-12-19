@@ -159,10 +159,8 @@ where
         );
 
         match (nonlin1, coup_nonlin1) {
-            (None, None) => (),
-            (None, Some(mut n)) => apply_nonlinear(state1, &mut n, *step_dist1, cur_step1),
-            (Some(n), None) => apply_nonlinear(state1, n, *step_dist1, cur_step1),
-            (Some(n), Some(cn)) => apply_nonlinear(
+            (n, None) => apply_nonlinear(state1, n, *step_dist1, cur_step1),
+            (n, Some(cn)) => apply_nonlinear(
                 state1,
                 &mut n.by_mut().add_nonlin_op(cn),
                 *step_dist1,
@@ -171,10 +169,8 @@ where
         }
 
         match (nonlin2, coup_nonlin2) {
-            (None, None) => (),
-            (None, Some(mut n)) => apply_nonlinear(state2, &mut n, *step_dist2, cur_step2),
-            (Some(n), None) => apply_nonlinear(state2, n, *step_dist2, cur_step2),
-            (Some(n), Some(cn)) => apply_nonlinear(
+            (n, None) => apply_nonlinear(state2, n, *step_dist2, cur_step2),
+            (n, Some(cn)) => apply_nonlinear(
                 state2,
                 &mut n.by_mut().add_nonlin_op(cn),
                 *step_dist2,

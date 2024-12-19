@@ -1,22 +1,33 @@
 use super::*;
 
 #[derive(typed_builder::TypedBuilder)]
-pub struct LleSolver<T, S, Linear = NoneOp<T>, Nonlin = NoneOp<T>, Const = NoneOp<T>>
+pub struct LleSolver<T, State, Linear = NoneOp<T>, Nonlin = NoneOp<T>, Const = NoneOp<T>>
 where
     T: LleNum,
 {
-    pub(crate) state: S,
-    #[builder(default, setter(strip_option))]
-    pub linear: Option<Linear>,
-    #[builder(default, setter(strip_option))]
-    pub nonlin: Option<Nonlin>,
-    #[builder(default, setter(strip_option))]
-    pub constant: Option<Const>,
+    pub(crate) state: State,
+    pub linear: Linear,
+    pub nonlin: Nonlin,
+    pub constant: Const,
     pub step_dist: T,
     #[builder(default, setter(skip))]
     pub(crate) fft: Option<(BufferedFft<T>, BufferedFft<T>)>,
     #[builder(default)]
     pub(crate) cur_step: Step,
+}
+
+impl<T: LleNum, State> LleSolver<T, State, NoneOp<T>, NoneOp<T>, NoneOp<T>> {
+    pub fn new(init: State, step_dist: T) -> Self {
+        Self {
+            state: init,
+            linear: NoneOp::default(),
+            nonlin: NoneOp::default(),
+            constant: NoneOp::default(),
+            step_dist,
+            fft: None,
+            cur_step: 0,
+        }
+    }
 }
 
 impl<T: LleNum, S: Clone, Linear: Clone, NonLin: Clone> Clone for LleSolver<T, S, Linear, NonLin> {
@@ -33,15 +44,51 @@ impl<T: LleNum, S: Clone, Linear: Clone, NonLin: Clone> Clone for LleSolver<T, S
     }
 }
 
-impl<T: LleNum, S, Linear, NonLin, Const> LleSolver<T, S, Linear, NonLin, Const> {
-    pub fn linear_mut(&mut self) -> &mut Option<Linear> {
+impl<T: LleNum, State, Linear, NonLin, Const> LleSolver<T, State, Linear, NonLin, Const> {
+    pub fn linear_mut(&mut self) -> &mut Linear {
         &mut self.linear
     }
-    pub fn nonlin_mut(&mut self) -> &mut Option<NonLin> {
+    pub fn nonlin_mut(&mut self) -> &mut NonLin {
         &mut self.nonlin
     }
-    pub fn constant_mut(&mut self) -> &mut Option<Const> {
+    pub fn constant_mut(&mut self) -> &mut Const {
         &mut self.constant
+    }
+
+    pub fn linear<L: LinearOp<T>>(self, linear: L) -> LleSolver<T, State, L, NonLin, Const> {
+        LleSolver {
+            state: self.state,
+            linear,
+            nonlin: self.nonlin,
+            constant: self.constant,
+            step_dist: self.step_dist,
+            fft: self.fft,
+            cur_step: self.cur_step,
+        }
+    }
+
+    pub fn nonlin<N: NonLinearOp<T>>(self, nonlin: N) -> LleSolver<T, State, Linear, N, Const> {
+        LleSolver {
+            state: self.state,
+            linear: self.linear,
+            nonlin,
+            constant: self.constant,
+            step_dist: self.step_dist,
+            fft: self.fft,
+            cur_step: self.cur_step,
+        }
+    }
+
+    pub fn constant<C: ConstOp<T>>(self, constant: C) -> LleSolver<T, State, Linear, NonLin, C> {
+        LleSolver {
+            state: self.state,
+            linear: self.linear,
+            nonlin: self.nonlin,
+            constant,
+            step_dist: self.step_dist,
+            fft: self.fft,
+            cur_step: self.cur_step,
+        }
     }
 }
 
@@ -66,33 +113,25 @@ where
         } = self;
         let state = state.as_mut();
 
-        if let Some(ref mut nonlin) = nonlin {
-            apply_nonlinear(state, nonlin, *step_dist, *cur_step);
-        }
+        apply_nonlinear(state, nonlin, *step_dist, *cur_step);
 
-        if let Some(ref linear) = linear {
-            let fft = fft.get_or_insert_with(|| BufferedFft::new(len));
-            apply_linear(
-                state,
-                &linear.by_ref_linear_op(),
-                fft,
-                *step_dist,
-                *cur_step,
-            );
-            if let Some(ref c) = constant {
-                apply_constant_scale(state, c, T::from_usize(len).unwrap(), *cur_step, *step_dist);
-            } else {
-                apply_constant_scale(
-                    state,
-                    &Complex::<T>::zero(),
-                    T::from_usize(len).unwrap(),
-                    *cur_step,
-                    *step_dist,
-                );
-            }
-        } else if let Some(ref c) = constant {
-            apply_constant(state, c, *cur_step, *step_dist);
-        }
+        let fft = fft.get_or_insert_with(|| BufferedFft::new(len));
+        apply_linear(
+            state,
+            &linear.by_ref_linear_op(),
+            fft,
+            *step_dist,
+            *cur_step,
+        );
+
+        apply_constant_scale(
+            state,
+            constant,
+            T::from_usize(len).unwrap(),
+            *cur_step,
+            *step_dist,
+        );
+
         *cur_step += 1;
     }
     fn state(&self) -> &[Complex<T>] {

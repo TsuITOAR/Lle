@@ -40,12 +40,7 @@ fn bench_linear(size: usize) {
     const STEP: Step = 1000;
     let linear =
         (0, -(Complex64::i() * ALPHA_START + 1.)).add_linear_op((2, -Complex64::i() * LINEAR / 2.));
-    let mut solver: LleSolver<f64, _, _> = LleSolver::builder()
-        .state(get_init(size))
-        .step_dist(STEP_DIST)
-        .linear(linear)
-        //.nonlin(lle::NoneOp::default())
-        .build();
+    let mut solver: LleSolver<f64, _, _> = LleSolver::new(get_init(size), STEP_DIST).linear(linear);
     solver.evolve_n(STEP);
 }
 

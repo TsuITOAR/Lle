@@ -38,11 +38,7 @@ pub fn bench_nonlinear(size: usize) {
     const STEP: Step = 1000;
     let nonlin = |x: Complex64| Complex64::i() * x.norm_sqr();
     let mut solver: LleSolver<f64, Vec<lle::num_complex::Complex<f64>>, NoneOp<f64>, _> =
-        LleSolver::builder()
-            .state(get_init(size))
-            .step_dist(STEP_DIST)
-            .nonlin(nonlin)
-            .build();
+        LleSolver::new(get_init(size), STEP_DIST).nonlin(nonlin);
     solver.evolve_n(STEP);
 }
 

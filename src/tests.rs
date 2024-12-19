@@ -47,6 +47,9 @@ fn zero_nonlin_op() {
     let mut s = LleSolver::<_, _>::builder()
         .state(start.clone())
         .step_dist(0.1)
+        .linear(NoneOp::default())
+        .constant(NoneOp::default())
+        .nonlin(NoneOp::default())
         .build();
     s.evolve_n_with_monitor(10, |x| {
         assert_eq!(start, x, "zero nonlin operation should not change state")
@@ -55,11 +58,8 @@ fn zero_nonlin_op() {
 #[test]
 fn zero_linear_op() {
     let start = [Complex64::new(1., 0.); 128];
-    let mut s = LleSolver::<_, _, _>::builder()
-        .state(start.clone())
-        .step_dist(0.1)
-        .linear((1u32, Complex64::from(0.)).add_linear_op((2, Complex64::from(0.))))
-        .build();
+    let mut s = LleSolver::new(start.clone(), 0.1)
+        .linear((1u32, Complex64::from(0.)).add_linear_op((2, Complex64::from(0.))));
 
     s.evolve_n_with_monitor(10, |x| {
         assert_eq!(start, x, "zero linear operation should not change state")
@@ -70,28 +70,17 @@ fn evolve_some() {
     let step_dist = 0.1;
     let mut start = [Complex64::new(1., 0.); 128];
     start[35] = (0.).into();
-    let mut s = LleSolver::<_, _, _>::builder()
-        .state(start.clone())
-        .step_dist(0.1)
-        .linear((1u32, Complex64::from(1.)).add_linear_op((2, Complex64::from(1.))))
-        .build();
+    let mut s = LleSolver::new(start.clone(), 0.1)
+        .linear((1u32, Complex64::from(1.)).add_linear_op((2, Complex64::from(1.))));
 
     s.evolve();
     assert_ne!(start, s.state(),);
     let nonlin = |x: Complex64| x.sqrt();
-    let mut s = LleSolver::<_, _, NoneOp<_>, _>::builder()
-        .state(start.clone())
-        .step_dist(0.1)
-        .nonlin(nonlin)
-        .build();
+    let mut s = LleSolver::new(start.clone(), 0.1).nonlin(nonlin);
     s.evolve();
     assert_ne!(start, s.state(),);
     let constant = Complex64::from(1.);
-    let mut s = LleSolver::<_, _, NoneOp<_>, NoneOp<_>, _>::builder()
-        .state(start.clone())
-        .step_dist(0.1)
-        .constant(constant)
-        .build();
+    let mut s = LleSolver::new(start.clone(), 0.1).constant(constant);
     s.evolve();
     assert_eq!(
         start

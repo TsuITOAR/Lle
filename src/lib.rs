@@ -168,7 +168,7 @@ pub fn apply_constant<T, C: ConstOp<T>>(
     }
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
-    constant.apply_linear_op(state, cur_step, step_dist);
+    constant.apply_const_op(state, cur_step, step_dist);
 }
 
 pub fn apply_constant_scale<T, C: ConstOp<T>>(

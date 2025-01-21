@@ -10,22 +10,50 @@ pub struct CoupledLleSolver<
     NonLin1 = NoneOp<T>,
     NonLin2 = NoneOp<T>,
     Const1 = NoneOp<T>,
+    ConstFreq1 = NoneOp<T>,
     Const2 = NoneOp<T>,
+    ConstFreq2 = NoneOp<T>,
     Couple = NoneOp<T>,
 > where
     T: LleNum,
     S1: FftSource<T>,
     S2: FftSource<T>,
 {
-    pub component1: LleSolver<T, S1, Linear1, NonLin1, Const1>,
-    pub component2: LleSolver<T, S2, Linear2, NonLin2, Const2>,
+    pub component1: LleSolver<T, S1, Linear1, NonLin1, Const1, ConstFreq1>,
+    pub component2: LleSolver<T, S2, Linear2, NonLin2, Const2, ConstFreq2>,
     pub couple: Couple,
     #[builder(default = 0, setter(skip))]
     cur_step: u32,
 }
 
-impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
-    CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
+impl<
+        T,
+        S1,
+        S2,
+        Linear1,
+        Linear2,
+        NonLin1,
+        NonLin2,
+        Const1,
+        ConstFreq1,
+        Const2,
+        ConstFreq2,
+        Couple,
+    >
+    CoupledLleSolver<
+        T,
+        S1,
+        S2,
+        Linear1,
+        Linear2,
+        NonLin1,
+        NonLin2,
+        Const1,
+        ConstFreq1,
+        Const2,
+        ConstFreq2,
+        Couple,
+    >
 where
     T: LleNum,
     S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
@@ -35,12 +63,14 @@ where
     NonLin1: NonLinearOp<T>,
     NonLin2: NonLinearOp<T>,
     Const1: ConstOp<T>,
+    ConstFreq1: ConstOp<T>,
     Const2: ConstOp<T>,
+    ConstFreq2: ConstOp<T>,
     Couple: CoupleOp<T>,
 {
     pub fn new(
-        comp1: LleSolver<T, S1, Linear1, NonLin1, Const1>,
-        comp2: LleSolver<T, S2, Linear2, NonLin2, Const2>,
+        comp1: LleSolver<T, S1, Linear1, NonLin1, Const1, ConstFreq1>,
+        comp2: LleSolver<T, S2, Linear2, NonLin2, Const2, ConstFreq2>,
         couple: Couple,
     ) -> Self {
         Self {
@@ -52,8 +82,34 @@ where
     }
 }
 
-impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple> Evolver<T>
-    for CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
+impl<
+        T,
+        S1,
+        S2,
+        Linear1,
+        Linear2,
+        NonLin1,
+        NonLin2,
+        Const1,
+        ConstFreq1,
+        Const2,
+        ConstFreq2,
+        Couple,
+    > Evolver<T>
+    for CoupledLleSolver<
+        T,
+        S1,
+        S2,
+        Linear1,
+        Linear2,
+        NonLin1,
+        NonLin2,
+        Const1,
+        ConstFreq1,
+        Const2,
+        ConstFreq2,
+        Couple,
+    >
 where
     T: LleNum,
     S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
@@ -63,7 +119,9 @@ where
     NonLin1: NonLinearOp<T>,
     NonLin2: NonLinearOp<T>,
     Const1: ConstOp<T>,
+    ConstFreq1: ConstOp<T>,
     Const2: ConstOp<T>,
+    ConstFreq2: ConstOp<T>,
     Couple: CoupleOp<T>,
 {
     fn evolve(&mut self) {
@@ -89,6 +147,7 @@ where
             linear: linear1,
             nonlin: nonlin1,
             constant: constant1,
+            constant_freq: const_freq1,
             fft: _,
             step_dist: step_dist1,
             ..
@@ -99,7 +158,6 @@ where
             nonlinear: coup_nonlin2,
             constant: coup_constant2,
         } = couple.extract_coup_op(state1, cur_step1);
-        let len1 = state1.len();
 
         //####################################################
         let LleSolver {
@@ -107,6 +165,7 @@ where
             linear: linear2,
             nonlin: nonlin2,
             constant: constant2,
+            constant_freq: const_freq2,
             fft: _,
             step_dist: step_dist2,
             ..
@@ -117,7 +176,6 @@ where
             nonlinear: coup_nonlin1,
             constant: coup_constant1,
         } = couple.extract_coup_op(state2, cur_step2);
-        let len2 = state2.len();
 
         //####################################################
         // There are situations that the linear term is not shown,
@@ -132,6 +190,7 @@ where
             *step_dist1,
             cur_step1,
         );
+        const_freq1.apply_const_op(state1.as_mut(), cur_step1, *step_dist1);
 
         //####################################################
 
@@ -144,6 +203,7 @@ where
             *step_dist2,
             cur_step2,
         );
+        const_freq2.apply_const_op(state2.as_mut(), cur_step2, *step_dist2);
 
         //####################################################
 
@@ -154,13 +214,15 @@ where
         state2.fft_process_inverse(fft2);
 
         //####################################################
+        let scale1 = state1.scale_factor();
+        let scale2 = state2.scale_factor();
         let state1 = state1.as_mut();
         let state2 = state2.as_mut();
 
         apply_constant_scale(
             state1,
             &constant1.by_ref_const_op().add_const_op(coup_constant1),
-            T::from_usize(len1).unwrap(),
+            scale1,
             *cur_step,
             *step_dist1,
         );
@@ -168,7 +230,7 @@ where
         apply_constant_scale(
             state2,
             &constant2.by_ref_const_op().add_const_op(coup_constant2),
-            T::from_usize(len2).unwrap(),
+            scale2,
             *cur_step,
             *step_dist2,
         );

@@ -19,7 +19,7 @@ use num_complex::Complex;
 use num_traits::{Float, FloatConst, NumAssignRef, NumRef};
 use rustfft::num_traits::Zero;
 
-pub use rustfft::{num_complex, num_traits, FftNum};
+pub use rustfft::{self, num_complex, num_traits, FftNum};
 
 #[cfg(test)]
 mod tests;
@@ -156,13 +156,15 @@ pub fn apply_constant_scale<T, C: ConstOp<T>>(
     apply_constant(state, constant, cur_step, step_dist);
 }
 
-pub fn apply_linear<
+pub fn apply_linear_and_const_freq<
     T: LleNum,
     S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
     L: LinearOp<T>,
+    C: ConstOp<T>,
 >(
     state: &mut S,
     linear: &L,
+    constant_freq: &C,
     fft: &mut S::FftProcessor,
     step_dist: T,
     cur_step: Step,
@@ -170,9 +172,9 @@ pub fn apply_linear<
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
     #[cfg(not(feature = "par"))]
-    apply_linear_sync(state, linear, fft, step_dist, cur_step);
+    apply_linear_and_const_freq_sync(state, linear, constant_freq, fft, step_dist, cur_step);
     #[cfg(feature = "par")]
-    apply_linear_par(state, linear, fft, step_dist, cur_step);
+    apply_linear_and_const_freq_par(state, linear, constant_freq, fft, step_dist, cur_step);
 }
 
 pub fn apply_linear_freq<T: LleNum, L: LinearOp<T>>(
@@ -217,33 +219,42 @@ pub fn apply_linear_freq_par<T: LleNum, L: LinearOp<T> + Sync>(
     linear.apply_freq_par(state_freq, step_dist, cur_step);
 }
 
-pub fn apply_linear_sync<
+pub fn apply_linear_and_const_freq_sync<
     T: LleNum,
     S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
     L: LinearOp<T>,
+    C: ConstOp<T>,
 >(
     state: &mut S,
     linear: &L,
+    constant_freq: &C,
     fft: &mut S::FftProcessor,
     step_dist: T,
     cur_step: Step,
 ) {
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
-    linear.apply(state, fft, step_dist, cur_step);
+    linear.apply(state, constant_freq, fft, step_dist, cur_step);
 }
 
 #[cfg(feature = "par")]
-pub fn apply_linear_par<T: LleNum, L: LinearOp<T> + Sync>(
-    state: &mut [Complex<T>],
+pub fn apply_linear_and_const_freq_par<
+    T: LleNum,
+    S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
+    L: LinearOp<T> + Sync,
+>(
+    state: &mut S,
     linear: &L,
-    fft: &mut (BufferedFft<T>, BufferedFft<T>),
+    constant_freq: &C,
+    fft: &mut S::FftProcessor,
     step_dist: T,
     cur_step: Step,
-) {
+) where
+    S::FftProcessor: Sync,
+{
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
-    linear.apply_par(state, fft, step_dist, cur_step);
+    linear.apply_par(state, constant_freq, fft, step_dist, cur_step);
 }
 
 pub fn apply_nonlinear<T: LleNum, NL: NonLinearOp<T>>(

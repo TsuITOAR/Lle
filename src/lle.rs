@@ -1,15 +1,22 @@
 use super::*;
 
 #[derive(typed_builder::TypedBuilder)]
-pub struct LleSolver<T, State, Linear = NoneOp<T>, Nonlin = NoneOp<T>, Const = NoneOp<T>>
-where
+pub struct LleSolver<
+    T,
+    State,
+    Linear = NoneOp<T>,
+    Nonlin = NoneOp<T>,
+    ConstTime = NoneOp<T>,
+    ConstFreq = NoneOp<T>,
+> where
     T: LleNum,
     State: FftSource<T>,
 {
     pub(crate) state: State,
     pub linear: Linear,
     pub nonlin: Nonlin,
-    pub constant: Const,
+    pub constant: ConstTime,
+    pub constant_freq: ConstFreq,
     pub step_dist: T,
     #[builder(default, setter(skip))]
     pub(crate) fft: Option<State::FftProcessor>,
@@ -24,6 +31,7 @@ impl<T: LleNum, State: FftSource<T>> LleSolver<T, State, NoneOp<T>, NoneOp<T>, N
             linear: NoneOp::default(),
             nonlin: NoneOp::default(),
             constant: NoneOp::default(),
+            constant_freq: NoneOp::default(),
             step_dist,
             fft: None,
             cur_step: 0,
@@ -31,15 +39,22 @@ impl<T: LleNum, State: FftSource<T>> LleSolver<T, State, NoneOp<T>, NoneOp<T>, N
     }
 }
 
-impl<T: LleNum, S: Clone + FftSource<T>, Linear: Clone, NonLin: Clone> Clone
-    for LleSolver<T, S, Linear, NonLin>
+impl<
+        T: LleNum,
+        S: Clone + FftSource<T>,
+        Linear: Clone,
+        NonLin: Clone,
+        Const: Clone,
+        ConstTime: Clone,
+    > Clone for LleSolver<T, S, Linear, NonLin, Const, ConstTime>
 {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
             linear: self.linear.clone(),
             nonlin: self.nonlin.clone(),
-            constant: self.constant,
+            constant: self.constant.clone(),
+            constant_freq: self.constant_freq.clone(),
             step_dist: self.step_dist,
             fft: None,
             cur_step: 0,
@@ -47,8 +62,8 @@ impl<T: LleNum, S: Clone + FftSource<T>, Linear: Clone, NonLin: Clone> Clone
     }
 }
 
-impl<T: LleNum, State: FftSource<T>, Linear, NonLin, Const>
-    LleSolver<T, State, Linear, NonLin, Const>
+impl<T: LleNum, State: FftSource<T>, Linear, NonLin, Const, ConstFreq>
+    LleSolver<T, State, Linear, NonLin, Const, ConstFreq>
 {
     pub fn linear_mut(&mut self) -> &mut Linear {
         &mut self.linear
@@ -60,36 +75,64 @@ impl<T: LleNum, State: FftSource<T>, Linear, NonLin, Const>
         &mut self.constant
     }
 
-    pub fn linear<L: LinearOp<T>>(self, linear: L) -> LleSolver<T, State, L, NonLin, Const> {
+    pub fn linear<L: LinearOp<T>>(
+        self,
+        linear: L,
+    ) -> LleSolver<T, State, L, NonLin, Const, ConstFreq> {
         LleSolver {
             state: self.state,
             linear,
             nonlin: self.nonlin,
             constant: self.constant,
+            constant_freq: self.constant_freq,
             step_dist: self.step_dist,
             fft: self.fft,
             cur_step: self.cur_step,
         }
     }
 
-    pub fn nonlin<N: NonLinearOp<T>>(self, nonlin: N) -> LleSolver<T, State, Linear, N, Const> {
+    pub fn nonlin<N: NonLinearOp<T>>(
+        self,
+        nonlin: N,
+    ) -> LleSolver<T, State, Linear, N, Const, ConstFreq> {
         LleSolver {
             state: self.state,
             linear: self.linear,
             nonlin,
             constant: self.constant,
+            constant_freq: self.constant_freq,
             step_dist: self.step_dist,
             fft: self.fft,
             cur_step: self.cur_step,
         }
     }
 
-    pub fn constant<C: ConstOp<T>>(self, constant: C) -> LleSolver<T, State, Linear, NonLin, C> {
+    pub fn constant<C: ConstOp<T>>(
+        self,
+        constant: C,
+    ) -> LleSolver<T, State, Linear, NonLin, C, ConstFreq> {
         LleSolver {
             state: self.state,
             linear: self.linear,
             nonlin: self.nonlin,
             constant,
+            constant_freq: self.constant_freq,
+            step_dist: self.step_dist,
+            fft: self.fft,
+            cur_step: self.cur_step,
+        }
+    }
+
+    pub fn constant_freq<C: ConstOp<T>>(
+        self,
+        constant_freq: C,
+    ) -> LleSolver<T, State, Linear, NonLin, Const, C> {
+        LleSolver {
+            state: self.state,
+            linear: self.linear,
+            nonlin: self.nonlin,
+            constant: self.constant,
+            constant_freq,
             step_dist: self.step_dist,
             fft: self.fft,
             cur_step: self.cur_step,
@@ -97,21 +140,23 @@ impl<T: LleNum, State: FftSource<T>, Linear, NonLin, Const>
     }
 }
 
-impl<T, S, Linear, NonLin, Const> Evolver<T> for LleSolver<T, S, Linear, NonLin, Const>
+impl<T, S, Linear, NonLin, Const, ConsFreq> Evolver<T>
+    for LleSolver<T, S, Linear, NonLin, Const, ConsFreq>
 where
     T: LleNum,
     S: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
     Linear: LinearOp<T> + Marker,
     NonLin: NonLinearOp<T>,
     Const: ConstOp<T>,
+    ConsFreq: ConstOp<T>,
 {
     fn evolve(&mut self) {
-        let len = self.state().len();
         let Self {
             state,
             linear,
             nonlin,
             constant,
+            constant_freq,
             step_dist,
             fft,
             cur_step,
@@ -122,22 +167,17 @@ where
 
         let fft = fft.get_or_insert_with(|| state.default_fft());
 
-        apply_linear(
+        apply_linear_and_const_freq(
             state,
             &linear.by_ref_linear_op(),
+            &constant_freq.by_ref_const_op(),
             fft,
             *step_dist,
             *cur_step,
         );
-        
+        let scale = state.scale_factor();
         let state0 = state.as_mut();
-        apply_constant_scale(
-            state0,
-            constant,
-            T::from_usize(len).unwrap(),
-            *cur_step,
-            *step_dist,
-        );
+        apply_constant_scale(state0, constant, scale, *cur_step, *step_dist);
 
         *cur_step += 1;
     }

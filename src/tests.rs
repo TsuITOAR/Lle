@@ -49,6 +49,7 @@ fn zero_nonlin_op() {
         .step_dist(0.1)
         .linear(NoneOp::default())
         .constant(NoneOp::default())
+        .constant_freq(NoneOp::default())
         .nonlin(NoneOp::default())
         .build();
     s.evolve_n_with_monitor(10, |x| {

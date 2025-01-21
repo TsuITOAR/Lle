@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use function_name::named;
-use lle::{Evolver, Freq, LinearOp, LleSolver, Step};
+use lle::{Evolver, Freq, LinearOp, LleSolver, NoneOp, Step};
 use rustfft::num_complex::{Complex, Complex64};
 
 const ARRAY_SIZE: usize = 1024;
@@ -42,6 +42,7 @@ fn static_linear() {
         .linear(linear)
         .nonlin(nonlin)
         .constant(Complex64::from(CONSTANT))
+        .constant_freq(NoneOp::default())
         .build();
 
     use jkplot::ColorMapVisualizer;
@@ -74,6 +75,7 @@ fn moving_linear() {
         .linear(linear)
         .nonlin(nonlin)
         .constant(Complex64::from(CONSTANT))
+        .constant_freq(NoneOp::default())
         .build();
     use jkplot::ColorMapVisualizer;
     let path = get_file_path(concat!(function_name!(), ".png"));
@@ -112,6 +114,7 @@ fn step_linear() {
         .linear(linear)
         .nonlin(nonlin)
         .constant(Complex64::from(CONSTANT))
+        .constant_freq(NoneOp::default())
         .build();
     use jkplot::ColorMapVisualizer;
     let path = get_file_path(concat!(function_name!(), ".png"));

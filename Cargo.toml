@@ -36,6 +36,8 @@ jkplot = { git = "https://github.com/TsuITOAR/jkplot" }
 function_name = "^0.3"
 criterion = "^0.5"
 rand = "^0.8"
+assert_approx_eq = "1"
+
 
 [[bench]]
 name = "linear_bench"

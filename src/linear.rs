@@ -125,9 +125,9 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
         S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
         C: ConstOp<T>,
     {
-        if self.skip() {
+        /* if self.skip() && const_freq.skip() {
             return;
-        }
+        } */
 
         state.fft_process_forward(fft);
         self.apply_freq(state.as_mut(), step_dist, cur_step);
@@ -159,7 +159,7 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
         S::FftProcessor: Sync,
         C: Sync + ConstOp<T>,
     {
-        if self.skip() {
+        if self.skip() && const_freq.skip() {
             return;
         }
 

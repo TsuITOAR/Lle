@@ -298,4 +298,24 @@ pub fn freq_at(len: usize, i: usize) -> Freq {
     ((i + len - split_pos) % len) as Freq - (len - split_pos) as Freq
 }
 
+pub fn index_at(len: usize, freq: Freq) -> usize {
+    let freq = freq + len as Freq;
+    (freq as usize) % len
+}
+
 const ILP_STREAM: usize = 8;
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn index_freq_consistent() {
+        let len = 100;
+        for i in 0..len {
+            assert_eq!(i, super::index_at(len, super::freq_at(len, i)));
+        }
+        let len = 99;
+        for i in 0..len {
+            assert_eq!(i, super::index_at(len, super::freq_at(len, i)));
+        }
+    }
+}

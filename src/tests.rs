@@ -71,25 +71,24 @@ fn evolve_some() {
     let step_dist = 0.1;
     let mut start = [Complex64::new(1., 0.); 128];
     start[35] = (0.).into();
-    let mut s = LleSolver::new(start.clone(), 0.1)
+    let mut s = LleSolver::new(start.clone(), step_dist)
         .linear((1u32, Complex64::from(1.)).add_linear_op((2, Complex64::from(1.))));
 
     s.evolve();
     assert_ne!(start, s.state(),);
     let nonlin = |x: Complex64| x.sqrt();
-    let mut s = LleSolver::new(start.clone(), 0.1).nonlin(nonlin);
+    let mut s = LleSolver::new(start.clone(), step_dist).nonlin(nonlin);
     s.evolve();
     assert_ne!(start, s.state(),);
-    let constant = Complex64::from(1.);
-    let mut s = LleSolver::new(start.clone(), 0.1).constant(constant);
+    let constant = Complex64::from(10.);
+    let mut s = LleSolver::new(start.clone(), step_dist).constant(constant);
     s.evolve();
-    assert_eq!(
-        start
-            .iter()
-            .map(|x| x + step_dist * constant)
-            .collect::<Vec<_>>(),
-        s.state(),
-    );
+
+    for (a, b) in start.iter().zip(s.state().iter()) {
+        use assert_approx_eq::assert_approx_eq;
+        use num_complex::ComplexFloat;
+        assert_approx_eq!(a + step_dist * constant, b);
+    }
 }
 
 #[test]

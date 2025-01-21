@@ -65,6 +65,13 @@ impl<
 impl<T: LleNum, State: FftSource<T>, Linear, NonLin, Const, ConstFreq>
     LleSolver<T, State, Linear, NonLin, Const, ConstFreq>
 {
+    pub fn get_raw_state(&self) -> &State {
+        &self.state
+    }
+    pub fn get_raw_state_mut(&mut self) -> &mut State {
+        &mut self.state
+    }
+    
     pub fn linear_mut(&mut self) -> &mut Linear {
         &mut self.linear
     }

@@ -114,20 +114,17 @@ impl<T: LleNum> LinearOp<T> for LinearOpCached<T> {
 
 pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
     // !WARN:this function will scale every element 'len' times due to fft
-    fn apply(
-        &self,
-        state: &mut [Complex<T>],
-        fft: &mut (BufferedFft<T>, BufferedFft<T>),
-        step_dist: T,
-        cur_step: Step,
-    ) {
+    fn apply<S>(&self, state: &mut S, fft: &mut S::FftProcessor, step_dist: T, cur_step: Step)
+    where
+        S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
+    {
         if self.skip() {
             return;
         }
 
-        fft.0.fft_process(state);
-        self.apply_freq(state, step_dist, cur_step);
-        fft.1.fft_process(state);
+        state.fft_process_forward(fft);
+        self.apply_freq(state.as_mut(), step_dist, cur_step);
+        state.fft_process_inverse(fft);
     }
 
     // input state_freq should not be fft shifted before
@@ -141,22 +138,18 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
     }
 
     #[cfg(feature = "par")]
-    fn apply_par(
-        &self,
-        state: &mut [Complex<T>],
-        fft: &mut (BufferedFft<T>, BufferedFft<T>),
-        step_dist: T,
-        cur_step: Step,
-    ) where
+    fn apply_par(&self, state: &mut S, fft: &mut S::FftProcessor, step_dist: T, cur_step: Step)
+    where
         Self: Sync,
+        S: Sync + AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
     {
         if self.skip() {
             return;
         }
 
-        fft.0.fft_process(state);
+        state.fft_process_forward(fft);
         self.apply_freq_par(state, step_dist, cur_step);
-        fft.1.fft_process(state);
+        state.fft_process_inverse(fft);
     }
 
     #[cfg(feature = "par")]

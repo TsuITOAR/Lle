@@ -4,6 +4,7 @@ use super::*;
 pub struct LleSolver<T, State, Linear = NoneOp<T>, Nonlin = NoneOp<T>, Const = NoneOp<T>>
 where
     T: LleNum,
+    State: FftSource<T>,
 {
     pub(crate) state: State,
     pub linear: Linear,
@@ -11,12 +12,12 @@ where
     pub constant: Const,
     pub step_dist: T,
     #[builder(default, setter(skip))]
-    pub(crate) fft: Option<(BufferedFft<T>, BufferedFft<T>)>,
+    pub(crate) fft: Option<State::FftProcessor>,
     #[builder(default)]
     pub(crate) cur_step: Step,
 }
 
-impl<T: LleNum, State> LleSolver<T, State, NoneOp<T>, NoneOp<T>, NoneOp<T>> {
+impl<T: LleNum, State: FftSource<T>> LleSolver<T, State, NoneOp<T>, NoneOp<T>, NoneOp<T>> {
     pub fn new(init: State, step_dist: T) -> Self {
         Self {
             state: init,
@@ -30,7 +31,9 @@ impl<T: LleNum, State> LleSolver<T, State, NoneOp<T>, NoneOp<T>, NoneOp<T>> {
     }
 }
 
-impl<T: LleNum, S: Clone, Linear: Clone, NonLin: Clone> Clone for LleSolver<T, S, Linear, NonLin> {
+impl<T: LleNum, S: Clone + FftSource<T>, Linear: Clone, NonLin: Clone> Clone
+    for LleSolver<T, S, Linear, NonLin>
+{
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
@@ -44,7 +47,9 @@ impl<T: LleNum, S: Clone, Linear: Clone, NonLin: Clone> Clone for LleSolver<T, S
     }
 }
 
-impl<T: LleNum, State, Linear, NonLin, Const> LleSolver<T, State, Linear, NonLin, Const> {
+impl<T: LleNum, State: FftSource<T>, Linear, NonLin, Const>
+    LleSolver<T, State, Linear, NonLin, Const>
+{
     pub fn linear_mut(&mut self) -> &mut Linear {
         &mut self.linear
     }
@@ -95,7 +100,7 @@ impl<T: LleNum, State, Linear, NonLin, Const> LleSolver<T, State, Linear, NonLin
 impl<T, S, Linear, NonLin, Const> Evolver<T> for LleSolver<T, S, Linear, NonLin, Const>
 where
     T: LleNum,
-    S: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+    S: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
     Linear: LinearOp<T> + Marker,
     NonLin: NonLinearOp<T>,
     Const: ConstOp<T>,
@@ -111,11 +116,12 @@ where
             fft,
             cur_step,
         } = self;
-        let state = state.as_mut();
+        let state0 = state.as_mut();
 
-        apply_nonlinear(state, nonlin, *step_dist, *cur_step);
+        apply_nonlinear(state0, nonlin, *step_dist, *cur_step);
 
-        let fft = fft.get_or_insert_with(|| BufferedFft::new(len));
+        let fft = fft.get_or_insert_with(|| state.default_fft());
+
         apply_linear(
             state,
             &linear.by_ref_linear_op(),
@@ -123,9 +129,10 @@ where
             *step_dist,
             *cur_step,
         );
-
+        
+        let state0 = state.as_mut();
         apply_constant_scale(
-            state,
+            state0,
             constant,
             T::from_usize(len).unwrap(),
             *cur_step,

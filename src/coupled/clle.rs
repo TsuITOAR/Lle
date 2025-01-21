@@ -14,6 +14,8 @@ pub struct CoupledLleSolver<
     Couple = NoneOp<T>,
 > where
     T: LleNum,
+    S1: FftSource<T>,
+    S2: FftSource<T>,
 {
     pub component1: LleSolver<T, S1, Linear1, NonLin1, Const1>,
     pub component2: LleSolver<T, S2, Linear2, NonLin2, Const2>,
@@ -26,8 +28,8 @@ impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
     CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
 where
     T: LleNum,
-    S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+    S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
+    S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
     Linear1: LinearOp<T> + Marker,
     Linear2: LinearOp<T> + Marker,
     NonLin1: NonLinearOp<T>,
@@ -54,8 +56,8 @@ impl<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple> Evol
     for CoupledLleSolver<T, S1, S2, Linear1, Linear2, NonLin1, NonLin2, Const1, Const2, Couple>
 where
     T: LleNum,
-    S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
-    S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]>,
+    S1: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
+    S2: AsMut<[Complex<T>]> + AsRef<[Complex<T>]> + FftSource<T>,
     Linear1: LinearOp<T> + Marker,
     Linear2: LinearOp<T> + Marker,
     NonLin1: NonLinearOp<T>,
@@ -73,13 +75,21 @@ where
         } = self;
         let cur_step1 = *cur_step;
         let cur_step2 = *cur_step;
+
+        let fft1 = component1
+            .fft
+            .get_or_insert_with(|| component1.state.default_fft());
+        let fft2 = component2
+            .fft
+            .get_or_insert_with(|| component2.state.default_fft());
+
         //####################################################
         let LleSolver {
             state: state1,
             linear: linear1,
             nonlin: nonlin1,
             constant: constant1,
-            fft: fft1,
+            fft: _,
             step_dist: step_dist1,
             ..
         } = component1;
@@ -97,7 +107,7 @@ where
             linear: linear2,
             nonlin: nonlin2,
             constant: constant2,
-            fft: fft2,
+            fft: _,
             step_dist: step_dist2,
             ..
         } = component2;
@@ -113,21 +123,23 @@ where
         // There are situations that the linear term is not shown,
         // when couple doesn't have linear term and the component doesn't have linear term
         // but it's very uncommon, so I will just ignore it
-        let fft1 = fft1.get_or_insert_with(|| BufferedFft::new(len1));
-        fft1.0.fft_process(state1);
+
+        let state1 = &mut component1.state;
+        state1.fft_process_forward(fft1);
         apply_linear_freq(
-            state1,
+            state1.as_mut(),
             &linear1.by_ref_linear_op().add_linear_op(coup_linear1),
             *step_dist1,
             cur_step1,
         );
 
         //####################################################
-        let fft2 = fft2.get_or_insert_with(|| BufferedFft::new(len2));
-        fft2.0.fft_process(state2);
+
+        let state2 = &mut component2.state;
+        state2.fft_process_forward(fft2);
 
         apply_linear_freq(
-            state2,
+            state2.as_mut(),
             &linear2.by_ref_linear_op().add_linear_op(coup_linear2),
             *step_dist2,
             cur_step2,
@@ -135,13 +147,16 @@ where
 
         //####################################################
 
-        mix_freq(couple, state1, state2, *step_dist1);
+        mix_freq(couple, state1.as_mut(), state2.as_mut(), *step_dist1);
 
         //####################################################
-        fft1.1.fft_process(state1);
-        fft2.1.fft_process(state2);
+        state1.fft_process_inverse(fft1);
+        state2.fft_process_inverse(fft2);
 
         //####################################################
+        let state1 = state1.as_mut();
+        let state2 = state2.as_mut();
+
         apply_constant_scale(
             state1,
             &constant1.by_ref_const_op().add_const_op(coup_constant1),

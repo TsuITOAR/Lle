@@ -3,25 +3,23 @@
 #![feature(portable_simd)]
 mod const_term;
 mod coupled;
+mod fft;
 mod linear;
 mod lle;
 mod nonlinear;
 
 pub use const_term::*;
 pub use coupled::*;
+pub use fft::*;
 pub use linear::*;
 pub use lle::*;
 pub use nonlinear::*;
 
-use std::sync::Arc;
-
 use num_complex::Complex;
 use num_traits::{Float, FloatConst, NumAssignRef, NumRef};
 use rustfft::num_traits::Zero;
-use rustfft::FftPlanner;
-use rustfft::{Fft, FftNum};
 
-pub use rustfft::{self, num_complex, num_traits};
+pub use rustfft::{num_complex, num_traits, FftNum};
 
 #[cfg(test)]
 mod tests;
@@ -101,35 +99,6 @@ pub trait ParEvolver<T: LleNum> {
     }
 } */
 
-pub struct BufferedFft<T: LleNum> {
-    fft: Arc<dyn Fft<T>>,
-    buf: Vec<Complex<T>>,
-}
-
-impl<T: LleNum> BufferedFft<T> {
-    pub fn new(len: usize) -> (Self, Self) {
-        let mut f = FftPlanner::new();
-        let fft1 = f.plan_fft_forward(len);
-        let fft2 = f.plan_fft_inverse(len);
-        (
-            Self {
-                buf: vec![Complex::zero(); fft1.get_inplace_scratch_len()],
-                fft: fft1,
-            },
-            Self {
-                buf: vec![Complex::zero(); fft2.get_inplace_scratch_len()],
-                fft: fft2,
-            },
-        )
-    }
-
-    pub fn fft_process(&mut self, data: &mut [Complex<T>]) {
-        #[cfg(feature = "puffin")]
-        puffin::profile_function!();
-        self.fft.process_with_scratch(data, &mut self.buf)
-    }
-}
-
 // !WARN:this function will scale every element 'len' times due to fft
 /*
 fn par_apply_linear<T: LleNum, L: LinearOp<T> + Sync>(
@@ -187,10 +156,14 @@ pub fn apply_constant_scale<T, C: ConstOp<T>>(
     apply_constant(state, constant, cur_step, step_dist);
 }
 
-pub fn apply_linear<T: LleNum, L: LinearOp<T>>(
-    state: &mut [Complex<T>],
+pub fn apply_linear<
+    T: LleNum,
+    S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
+    L: LinearOp<T>,
+>(
+    state: &mut S,
     linear: &L,
-    fft: &mut (BufferedFft<T>, BufferedFft<T>),
+    fft: &mut S::FftProcessor,
     step_dist: T,
     cur_step: Step,
 ) {
@@ -244,10 +217,14 @@ pub fn apply_linear_freq_par<T: LleNum, L: LinearOp<T> + Sync>(
     linear.apply_freq_par(state_freq, step_dist, cur_step);
 }
 
-pub fn apply_linear_sync<T: LleNum, L: LinearOp<T>>(
-    state: &mut [Complex<T>],
+pub fn apply_linear_sync<
+    T: LleNum,
+    S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
+    L: LinearOp<T>,
+>(
+    state: &mut S,
     linear: &L,
-    fft: &mut (BufferedFft<T>, BufferedFft<T>),
+    fft: &mut S::FftProcessor,
     step_dist: T,
     cur_step: Step,
 ) {

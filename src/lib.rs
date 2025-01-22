@@ -241,7 +241,8 @@ pub fn apply_linear_and_const_freq_sync<
 pub fn apply_linear_and_const_freq_par<
     T: LleNum,
     S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
-    L: LinearOp<T> + Sync,
+    L: LinearOp<T>,
+    C: ConstOp<T>,
 >(
     state: &mut S,
     linear: &L,
@@ -249,9 +250,7 @@ pub fn apply_linear_and_const_freq_par<
     fft: &mut S::FftProcessor,
     step_dist: T,
     cur_step: Step,
-) where
-    S::FftProcessor: Sync,
-{
+) {
     #[cfg(feature = "puffin")]
     puffin::profile_function!();
     linear.apply_par(state, constant_freq, fft, step_dist, cur_step);

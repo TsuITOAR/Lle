@@ -8,13 +8,13 @@ use std::marker::PhantomData;
 #[cfg(feature = "par")]
 mod sync_l {
     pub trait Marker: Sync {}
-    impl<T: Sync> Marker for T {}
+    impl<T: ?Sized + Sync> Marker for T {}
 }
 
 #[cfg(not(feature = "par"))]
 mod sync_l {
     pub trait Marker {}
-    impl<T> Marker for T {}
+    impl<T: ?Sized> Marker for T {}
 }
 
 pub use sync_l::Marker;
@@ -155,16 +155,15 @@ pub(crate) trait LinearOpExt<T: LleNum>: LinearOp<T> {
         cur_step: Step,
     ) where
         Self: Sync,
-        S: Sync + AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T>,
-        S::FftProcessor: Sync,
-        C: Sync + ConstOp<T>,
+        S: AsRef<[Complex<T>]> + AsMut<[Complex<T>]> + FftSource<T> + ?Sized,
+        C: ConstOp<T>,
     {
         if self.skip() && const_freq.skip() {
             return;
         }
 
         state.fft_process_forward(fft);
-        self.apply_freq_par(state, step_dist, cur_step);
+        self.apply_freq_par(state.as_mut(), step_dist, cur_step);
         const_freq.apply_const_op(state.as_mut(), cur_step, step_dist);
         state.fft_process_inverse(fft);
     }

@@ -138,7 +138,7 @@ impl<T: LleNum> NonLinearOp<T> for SPhaMod {
     }
 }
 
-impl<T: LleNum, F: FnMut(Complex<T>) -> Complex<T>> NonLinearOp<T> for F {
+impl<T: LleNum, F: FnMut(Complex<T>) -> Complex<T> + Marker> NonLinearOp<T> for F {
     fn get_value(&mut self, _: Step, state: &[Complex<T>], dst: &mut [Complex<T>]) {
         dst.iter_mut()
             .zip(state.iter())

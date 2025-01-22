@@ -323,7 +323,7 @@ impl<T: LleNum, L: ConstOp<T>> ConstOp<T> for Option<L> {
     }
 }
 
-impl<T: LleNum, F: Fn(Step, usize) -> Complex<T>> ConstOp<T> for F {
+impl<T: LleNum, F: Fn(Step, usize) -> Complex<T> + Marker> ConstOp<T> for F {
     fn get_value(&self, step: Step, pos: usize, _state: &[Complex<T>]) -> Complex<T> {
         self(step, pos)
     }

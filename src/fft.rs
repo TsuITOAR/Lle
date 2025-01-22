@@ -3,10 +3,10 @@ use std::sync::Arc;
 use num_complex::Complex;
 use rustfft::{num_traits::Zero, FftPlanner};
 
-use crate::LleNum;
+use crate::{LleNum, Marker};
 
-pub trait FftSource<T: LleNum> {
-    type FftProcessor;
+pub trait FftSource<T: LleNum>: Marker {
+    type FftProcessor: Marker;
     fn fft_len(&self) -> usize;
     fn default_fft(len: usize) -> Self::FftProcessor;
     fn scale_factor(&self) -> T {

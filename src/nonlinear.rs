@@ -47,7 +47,7 @@ pub(crate) trait NonLinearOpExt<T: LleNum>: NonLinearOp<T> {
         if self.skip() {
             return;
         }
-        let len = state.len();
+        let len = state.fft_len();
         let mut buf = vec![Complex::zero(); len];
 
         self.get_value(cur_step, state, &mut buf);

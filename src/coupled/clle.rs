@@ -136,10 +136,10 @@ where
 
         let fft1 = component1
             .fft
-            .get_or_insert_with(|| component1.state.default_fft());
+            .get_or_insert_with(|| S1::default_fft(component1.state.fft_len()));
         let fft2 = component2
             .fft
-            .get_or_insert_with(|| component2.state.default_fft());
+            .get_or_insert_with(|| S2::default_fft(component2.state.fft_len()));
 
         //####################################################
         let LleSolver {

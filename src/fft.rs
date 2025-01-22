@@ -7,19 +7,25 @@ use crate::LleNum;
 
 pub trait FftSource<T: LleNum> {
     type FftProcessor;
-    fn default_fft(&self) -> Self::FftProcessor;
-    fn scale_factor(&self) -> T;
+    fn fft_len(&self) -> usize;
+    fn default_fft(len: usize) -> Self::FftProcessor;
+    fn scale_factor(&self) -> T {
+        T::from_usize(self.fft_len()).unwrap()
+    }
     fn fft_process_forward(&mut self, fft: &mut Self::FftProcessor);
     fn fft_process_inverse(&mut self, fft: &mut Self::FftProcessor);
 }
 
 impl<T: LleNum, const L: usize> FftSource<T> for [Complex<T>; L] {
     type FftProcessor = (BufferedFft<T>, BufferedFft<T>);
-    fn default_fft(&self) -> Self::FftProcessor {
-        BufferedFft::new(self.len())
+    fn fft_len(&self) -> usize {
+        L
+    }
+    fn default_fft(len: usize) -> Self::FftProcessor {
+        BufferedFft::new(len)
     }
     fn scale_factor(&self) -> T {
-        T::from_usize(self.len()).unwrap()
+        T::from_usize(self.fft_len()).unwrap()
     }
     fn fft_process_forward(&mut self, fft: &mut Self::FftProcessor) {
         fft.0.fft_process(self);
@@ -31,8 +37,11 @@ impl<T: LleNum, const L: usize> FftSource<T> for [Complex<T>; L] {
 
 impl<T: LleNum> FftSource<T> for Vec<Complex<T>> {
     type FftProcessor = (BufferedFft<T>, BufferedFft<T>);
-    fn default_fft(&self) -> Self::FftProcessor {
-        BufferedFft::new(self.len())
+    fn fft_len(&self) -> usize {
+        self.len()
+    }
+    fn default_fft(len: usize) -> Self::FftProcessor {
+        BufferedFft::new(len)
     }
     fn scale_factor(&self) -> T {
         T::from_usize(self.len()).unwrap()
@@ -45,19 +54,41 @@ impl<T: LleNum> FftSource<T> for Vec<Complex<T>> {
     }
 }
 
-impl<T: LleNum> FftSource<T> for &mut [Complex<T>] {
+impl<T: LleNum> FftSource<T> for [Complex<T>] {
     type FftProcessor = (BufferedFft<T>, BufferedFft<T>);
-    fn default_fft(&self) -> Self::FftProcessor {
-        BufferedFft::new(self.len())
+    fn fft_len(&self) -> usize {
+        self.len()
+    }
+    fn default_fft(len: usize) -> Self::FftProcessor {
+        BufferedFft::new(len)
     }
     fn scale_factor(&self) -> T {
-        T::from_usize(self.len()).unwrap()
+        T::from_usize(self.fft_len()).unwrap()
     }
     fn fft_process_forward(&mut self, fft: &mut Self::FftProcessor) {
         fft.0.fft_process(self);
     }
     fn fft_process_inverse(&mut self, fft: &mut Self::FftProcessor) {
         fft.1.fft_process(self);
+    }
+}
+
+impl<T: LleNum, S: FftSource<T>> FftSource<T> for &mut S {
+    type FftProcessor = S::FftProcessor;
+    fn fft_len(&self) -> usize {
+        S::fft_len(*self)
+    }
+    fn default_fft(len: usize) -> Self::FftProcessor {
+        S::default_fft(len)
+    }
+    fn scale_factor(&self) -> T {
+        S::scale_factor(*self)
+    }
+    fn fft_process_forward(&mut self, fft: &mut Self::FftProcessor) {
+        S::fft_process_forward(*self, fft)
+    }
+    fn fft_process_inverse(&mut self, fft: &mut Self::FftProcessor) {
+        S::fft_process_inverse(*self, fft)
     }
 }
 

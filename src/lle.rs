@@ -71,7 +71,7 @@ impl<T: LleNum, State: FftSource<T>, Linear, NonLin, Const, ConstFreq>
     pub fn get_raw_state_mut(&mut self) -> &mut State {
         &mut self.state
     }
-    
+
     pub fn linear_mut(&mut self) -> &mut Linear {
         &mut self.linear
     }
@@ -172,7 +172,7 @@ where
 
         apply_nonlinear(state0, nonlin, *step_dist, *cur_step);
 
-        let fft = fft.get_or_insert_with(|| state.default_fft());
+        let fft = fft.get_or_insert_with(|| S::default_fft(state.fft_len()));
 
         apply_linear_and_const_freq(
             state,

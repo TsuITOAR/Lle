@@ -271,7 +271,7 @@ impl<T: LleNum> CoupleOp<T> for ModeSplit<T> {
         if strength.is_zero() {
             return;
         }
-        let mode = mode.rem_euclid(s1.len() as _) as usize;
+        let mode = mode.rem_euclid(s1.fft_len() as _) as usize;
         let temp = s1[mode];
         s1[mode] += Complex::i() * strength * step_dist * s2[mode].conj();
         s2[mode] += -Complex::i() * strength * step_dist * temp.conj();

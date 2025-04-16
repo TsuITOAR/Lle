@@ -8,6 +8,8 @@ mod linear;
 mod lle;
 mod nonlinear;
 
+use std::marker::PhantomData;
+
 pub use const_term::*;
 pub use coupled::*;
 pub use fft::*;
@@ -300,6 +302,11 @@ pub fn freq_at(len: usize, i: usize) -> Freq {
 pub fn index_at(len: usize, freq: Freq) -> usize {
     let freq = freq + len as Freq;
     (freq as usize) % len
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NoneOp<T> {
+    p: PhantomData<T>,
 }
 
 const ILP_STREAM: usize = 8;

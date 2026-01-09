@@ -1,3 +1,4 @@
+use iterator_ilp::TrustedLowerBound;
 #[cfg(feature = "par")]
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -193,9 +194,11 @@ pub type ShiftFreqIter<'a, T> = Map<
     impl FnMut((usize, &'a mut T)) -> (Freq, &'a mut T) + 'a,
 >; */
 
-pub fn shift_freq<'a, T>(freq: &'a mut [T]) -> impl Iterator<Item = (Freq, &'a mut T)> + 'a {
+pub fn shift_freq<'a, T>(
+    freq: &'a mut [T],
+) -> impl TrustedLowerBound<Item = (Freq, &'a mut T)> + 'a {
     let len = freq.len();
-    let split_pos = (len + 1) / 2; //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len;
+    let split_pos = len.div_ceil(2); //for odd situations, need to shift (len+1)/2..len, for evens, len/2..len;
     let (pos_freq, neg_freq) = freq.split_at_mut(split_pos);
     neg_freq
         .iter_mut()
@@ -297,7 +300,6 @@ impl<T: LleNum, F: Fn(Step) -> Complex<T> + Marker> LinearOp<T> for (DiffOrder, 
 pub fn none_op<T>() -> NoneOp<T> {
     NoneOp::default()
 }
-
 
 impl<T> Default for NoneOp<T> {
     fn default() -> Self {

@@ -295,7 +295,7 @@ pub fn mix_freq<T: LleNum, C: CoupleOp<T>>(
 }
 
 pub fn freq_at(len: usize, i: usize) -> Freq {
-    let split_pos = (len + 1) / 2;
+    let split_pos = len.div_ceil(2);
     ((i + len - split_pos) % len) as Freq - (len - split_pos) as Freq
 }
 

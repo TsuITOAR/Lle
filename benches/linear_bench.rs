@@ -1,6 +1,7 @@
 use std::f64::consts::PI;
+use std::hint::black_box;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use lle::{num_complex::Complex64, num_traits::Zero, LleSolver};
 
 fn add_random(intensity: f64, sigma: f64, state: &mut [Complex64], seed: impl Into<Option<u64>>) {
@@ -9,16 +10,16 @@ fn add_random(intensity: f64, sigma: f64, state: &mut [Complex64], seed: impl In
         use rand::SeedableRng;
         let mut rand = rand::rngs::StdRng::seed_from_u64(seed);
         state.iter_mut().for_each(|x| {
-            *x += (Complex64::i() * rand.gen::<f64>() * 2. * PI).exp()
-                * (-(rand.gen::<f64>() / sigma).powi(2) / 2.).exp()
+            *x += (Complex64::i() * rand.random::<f64>() * 2. * PI).exp()
+                * (-(rand.random::<f64>() / sigma).powi(2) / 2.).exp()
                 / ((2. * PI).sqrt() * sigma)
                 * intensity
         })
     } else {
-        let mut rand = rand::thread_rng();
+        let mut rand = rand::rng();
         state.iter_mut().for_each(|x| {
-            *x += (Complex64::i() * rand.gen::<f64>() * 2. * PI).exp()
-                * (-(rand.gen::<f64>() / sigma).powi(2) / 2.).exp()
+            *x += (Complex64::i() * rand.random::<f64>() * 2. * PI).exp()
+                * (-(rand.random::<f64>() / sigma).powi(2) / 2.).exp()
                 / ((2. * PI).sqrt() * sigma)
                 * intensity
         })

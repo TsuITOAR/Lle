@@ -11,10 +11,10 @@ puffin = ["dep:puffin"]
 par = []
 
 [dependencies]
-iterator_ilp = "2.1.2"
+iterator_ilp = "3"
 rustfft = "^6.2"
 num-complex = { version = "^0.4", features = ["serde"] }
-typed-builder = "^0.20"
+typed-builder = "^0.23"
 serde = { version = "^1.0", features = ["derive"] }
 rayon = { version = "1.10.0" }
 log = "0.4.22"
@@ -34,8 +34,8 @@ puffin = { version = "^0.19", git = "https://github.com/tedsteen/puffin.git", re
 [dev-dependencies]
 jkplot = { git = "https://github.com/TsuITOAR/jkplot" }
 function_name = "^0.3"
-criterion = "^0.5"
-rand = "^0.8"
+criterion = "^0.8"
+rand = "^0.9"
 assert_approx_eq = "1"
 
 
